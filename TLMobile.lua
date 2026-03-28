@@ -3241,14 +3241,22 @@ do
 
     -- fpsWidget-Breite: per UIScale skaliert, daher Original-Größe behalten
     -- Nur die Skalierung (scl) wird kleiner — FW_W bleibt 288, damit UIScale korrekt rechnet
+    -- Zentraler Mobile-Scale für Panels, QA-Bar, fpsWidget (PC = 1.0)
+    local _mobScl = 1.0
+    if _isMob then
+        _mobScl = math.clamp(_short / 667, 0.50, 0.72)
+    elseif _isTab then
+        _mobScl = math.clamp(_short / 900, 0.72, 0.88)
+    end
     _TL_VP.isMob   = _isMob
     _TL_VP.isTab   = _isTab
     _TL_VP.isTouch = _isTch
     _TL_VP.short   = _short
     _TL_VP.long    = _long
     _TL_VP.pnlW    = _pnlW
-    _TL_VP.fwW     = 288   -- unveränderter Originalwert; UIScale übernimmt Skalierung
+    _TL_VP.fwW     = 288
     _TL_VP.fwH     = 34
+    _TL_VP.mobScl  = _mobScl
 end
 
 -- FIX Mobile: Panel-Breite an Bildschirmbreite anpassen
@@ -3280,7 +3288,13 @@ p.BackgroundTransparency = 0
 p.BorderSizePixel  = 0
 p.Visible          = false
 p.ClipsDescendants = true
-corner(p, 8)   -- eckiger Matrix-Look, identisch zur SmartBar BAR_R=8
+corner(p, 8)
+-- Mobile: Panel per UIScale verkleinern (PC bleibt unverändert)
+if _TL_VP.isTouch and _TL_VP.mobScl < 1.0 then
+    local _pScl = Instance.new("UIScale", p)
+    _pScl.Scale = _TL_VP.mobScl
+    p.AnchorPoint = Vector2.new(0, 0)
+end
 
 -- Rahmen: UIStroke mit grüner Farbe
 local pStroke = Instance.new("UIStroke", p)
@@ -16680,16 +16694,6 @@ if panels[name] then
     pan.Size     = UDim2.new(0, PANEL_W, 0, pan.Size.Y.Offset)
     pan.Position = UDim2.new(PANEL_HIDE.X.Scale, PANEL_HIDE.X.Offset, PANEL_HIDE.Y.Scale, PANEL_HIDE.Y.Offset + 18)
     pan.Visible  = true
-    -- FIX Mobile: UIScale auf Panel anwenden falls Panel breiter als Bildschirm
-    pcall(function()
-        local _vps = workspace.CurrentCamera.ViewportSize
-        local _availW = _vps.X - _PNL_X - 8
-        if PANEL_W > _availW and _availW > 0 then
-            local _pScl = pan:FindFirstChildOfClass("UIScale")
-            if not _pScl then _pScl = Instance.new("UIScale", pan) end
-            _pScl.Scale = math.clamp(_availW / PANEL_W, 0.45, 1.0)
-        end
-    end)
     local _pt = tw(pan, 0.28, {
         Position               = PANEL_SHOW,
         BackgroundTransparency = 0,
@@ -16845,8 +16849,7 @@ do
     local isMob = touch and not kbd and short < 500
     local isTab = touch and not kbd and short >= 500 and short < 900
     if isMob or isTab then
-        local scl = isMob and math.clamp((short*0.7)/FW_W, 0.5, 0.9)
-                           or  math.clamp((short*0.5)/FW_W, 0.65, 0.85)
+        local scl = _TL_VP.mobScl  -- zentraler Scale aus _TL_VP
         local fwUIScale = Instance.new("UIScale", fpsWidget)
         fwUIScale.Scale = scl
         fpsWidget.AnchorPoint = Vector2.new(0.5, 1)
@@ -17512,9 +17515,8 @@ do
     local _isMob = _touch and not _kbd and _short < 500
     local _isTab = _touch and not _kbd and _short >= 500
     if _isMob or _isTab then
-        local _scl = _isMob and 0.80 or 0.90
         local _qaScale = Instance.new("UIScale", qaBar)
-        _qaScale.Scale = _scl
+        _qaScale.Scale = _TL_VP.mobScl  -- zentraler Scale aus _TL_VP
         qaBar.AnchorPoint = Vector2.new(1, 0)
         qaBar.Position    = UDim2.new(1, _QA_RIGHT_OFFSET, 0, _QA_TOP_Y)
     end

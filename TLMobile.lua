@@ -16419,18 +16419,21 @@ do
     local _kbd   = pcall(function() return UIS.KeyboardEnabled end) and UIS.KeyboardEnabled
     local _short = math.min(_vp.X, _vp.Y)
     if _touch and not _kbd and _short < 500 then
-        VL_W      = 72
-        VL_H      = 78
-        VL_GAP    = 8
-        VL_ICON_W = 72
-        VL_ICON_H = 72
+        -- Handy: gleiche Größe wie PC (war vorher 72x78 – zu groß)
+        VL_W      = 46
+        VL_H      = 50
+        VL_GAP    = 5
+        VL_ICON_W = 46
+        VL_ICON_H = 46
     elseif _touch and not _kbd then
-        VL_W      = 66
-        VL_H      = 72
-        VL_GAP    = 7
-        VL_ICON_W = 66
-        VL_ICON_H = 66
+        -- Tablet: leicht kleiner als PC
+        VL_W      = 52
+        VL_H      = 58
+        VL_GAP    = 6
+        VL_ICON_W = 52
+        VL_ICON_H = 52
     else
+        -- PC: original
         VL_W      = 58
         VL_H      = 64
         VL_GAP    = 6
@@ -16528,9 +16531,6 @@ do
     local _isMob2 = _touch2 and not _kbd2 and _short2 < 500
     local _isTab2 = _touch2 and not _kbd2 and _short2 >= 500 and _short2 < 900
     if _isMob2 or _isTab2 then
-        -- UIScale auf den Tab-Karten-Container anwenden
-        local _tcScl = Instance.new("UIScale", tabCardsHolder)
-        _tcScl.Scale = _TL_VP.mobScl
         tabCardsHolder.AnchorPoint = Vector2.new(1, 1)
         tabCardsHolder.Position    = UDim2.new(1, -5, 1, -80 - 34 - 8)
     else
@@ -16855,8 +16855,9 @@ do
         local scl = _TL_VP.mobScl  -- zentraler Scale aus _TL_VP
         local fwUIScale = Instance.new("UIScale", fpsWidget)
         fwUIScale.Scale = scl
-        fpsWidget.AnchorPoint = Vector2.new(0.5, 1)
-        fpsWidget.Position    = UDim2.new(0.5, 0, 1, -80)
+        -- Position: bündig rechts oben neben den Tab-Karten
+        fpsWidget.AnchorPoint = Vector2.new(1, 0)
+        fpsWidget.Position    = UDim2.new(1, -(5 + VL_W + 4), 0, 5)
     else
         fpsWidget.AnchorPoint = Vector2.new(1, 0)
         fpsWidget.Position    = UDim2.new(1, -(5), 0, 5 + math.floor((VL_ICON_H - FW_H) / 2))

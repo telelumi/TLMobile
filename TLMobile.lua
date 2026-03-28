@@ -3007,9 +3007,17 @@ if onToggle then pcall(onToggle, on) end
 end
 local btn = Instance.new("TextButton", card)
 btn.Size = UDim2.new(1,0,1,0); btn.BackgroundTransparency = 1; btn.Text = ""; btn.ZIndex = 6
-btn.MouseButton1Click:Connect(function() setToggle(not togState) end)
+local _togDebounceA = false
 btn.InputBegan:Connect(function(inp)
-    if inp.UserInputType == Enum.UserInputType.Touch then setToggle(not togState) end
+    if inp.UserInputType == Enum.UserInputType.Touch then
+        if _togDebounceA then return end
+        _togDebounceA = true
+        setToggle(not togState)
+        task.delay(0.3, function() _togDebounceA = false end)
+    end
+end)
+btn.MouseButton1Click:Connect(function()
+    if not _togDebounceA then setToggle(not togState) end
 end)
 btn.MouseEnter:Connect(function()
 twP(card, 0.08, {BackgroundColor3 = C.bg3 or _C3_BG4})
@@ -4731,9 +4739,17 @@ end
 local togBtn = Instance.new("TextButton", card)
 togBtn.Size = UDim2.new(0,44,0,28); togBtn.Position = UDim2.new(1,-50,0,6)
 togBtn.BackgroundTransparency = 1; togBtn.Text = ""; togBtn.ZIndex = 7
-togBtn.MouseButton1Click:Connect(function() setToggle(not togState) end)
+local _togDebounceB = false
 togBtn.InputBegan:Connect(function(inp)
-    if inp.UserInputType == Enum.UserInputType.Touch then setToggle(not togState) end
+    if inp.UserInputType == Enum.UserInputType.Touch then
+        if _togDebounceB then return end
+        _togDebounceB = true
+        setToggle(not togState)
+        task.delay(0.3, function() _togDebounceB = false end)
+    end
+end)
+togBtn.MouseButton1Click:Connect(function()
+    if not _togDebounceB then setToggle(not togState) end
 end)
 rstBtn.MouseButton1Click:Connect(function()
 applyRatio((vDef-vMin)/(vMax-vMin))
@@ -4811,9 +4827,17 @@ end
 local btn = Instance.new("TextButton", card)
 btn.Size = UDim2.new(1,0,1,0); btn.BackgroundTransparency = 1
 btn.Text = ""; btn.ZIndex = 7
-btn.MouseButton1Click:Connect(function() setToggle(not togState) end)
+local _togDebounceC = false
 btn.InputBegan:Connect(function(inp)
-    if inp.UserInputType == Enum.UserInputType.Touch then setToggle(not togState) end
+    if inp.UserInputType == Enum.UserInputType.Touch then
+        if _togDebounceC then return end
+        _togDebounceC = true
+        setToggle(not togState)
+        task.delay(0.3, function() _togDebounceC = false end)
+    end
+end)
+btn.MouseButton1Click:Connect(function()
+    if not _togDebounceC then setToggle(not togState) end
 end)
 btn.MouseEnter:Connect(function()
 twP(card, 0.08, {BackgroundColor3 = C.bg3 or _C3_BG4})

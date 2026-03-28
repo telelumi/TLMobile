@@ -16528,6 +16528,9 @@ do
     local _isMob2 = _touch2 and not _kbd2 and _short2 < 500
     local _isTab2 = _touch2 and not _kbd2 and _short2 >= 500 and _short2 < 900
     if _isMob2 or _isTab2 then
+        -- UIScale auf den Tab-Karten-Container anwenden
+        local _tcScl = Instance.new("UIScale", tabCardsHolder)
+        _tcScl.Scale = _TL_VP.mobScl
         tabCardsHolder.AnchorPoint = Vector2.new(1, 1)
         tabCardsHolder.Position    = UDim2.new(1, -5, 1, -80 - 34 - 8)
     else

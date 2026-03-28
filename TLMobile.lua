@@ -16490,24 +16490,9 @@ SmartBar.ClipsDescendants       = false  -- tabs slide out below, not clipped
 corner(SmartBar, 10)
 -- UIStroke entfernt (kein grüner Rahmen mehr)
 
--- TL logo image centered in the icon button
-local tlMainIcon = Instance.new("ImageLabel", SmartBar)
-tlMainIcon.Size                   = UDim2.new(0, 32, 0, 32)
-tlMainIcon.Position               = UDim2.new(0.5, -16, 0.5, -16)
-tlMainIcon.BackgroundTransparency = 1
-tlMainIcon.Image                  = "rbxassetid://77458828386203"
-tlMainIcon.ImageColor3            = Color3.fromRGB(255, 255, 255)  -- Originalfarbe
-tlMainIcon.ScaleType              = Enum.ScaleType.Fit
-tlMainIcon.ZIndex                 = 10
-
--- "TL MENU" Label entfernt
-
--- clickable hitbox over the icon button
-local tlMainBtn = Instance.new("TextButton", SmartBar)
-tlMainBtn.Size                   = UDim2.new(1, 0, 1, 0)
-tlMainBtn.BackgroundTransparency = 1
-tlMainBtn.Text                   = ""
-tlMainBtn.ZIndex                 = 11
+-- tlMainIcon + tlMainBtn entfernt (Button ist im fpsWidget, kein doppelter Icon oben rechts)
+local tlMainIcon = nil  -- Referenz behalten damit spätere twP-Calls nicht crashen
+local tlMainBtn  = nil
 
 -- Rain/shimmer strip entfernt
 local rainLblBar = nil
@@ -16754,8 +16739,8 @@ tabCardsHolder.Size    = UDim2.new(0, VL_W, 0, 0)
 tw(tabCardsHolder, 0.30, {
     Size = UDim2.new(0, VL_W, 0, TOTAL_CARDS_H),
 }, Enum.EasingStyle.Back, Enum.EasingDirection.Out):Play()
--- pulse the TL icon (Originalfarbe behalten)
-twP(tlMainIcon, 0.18, {ImageColor3 = Color3.fromRGB(255, 255, 255)})
+-- pulse the TL icon (entfernt, tlMainIcon ist nil)
+if tlMainIcon then twP(tlMainIcon, 0.18, {ImageColor3 = Color3.fromRGB(255, 255, 255)}) end
 end
 function closeBar()
 isOpen = false
@@ -16778,8 +16763,8 @@ task.delay(0.22, function()
         tabCardsHolder.Visible = false
     end
 end)
--- dim the TL icon (Originalfarbe behalten)
-twP(tlMainIcon, 0.18, {ImageColor3 = Color3.fromRGB(255, 255, 255)})
+-- dim the TL icon (entfernt, tlMainIcon ist nil)
+if tlMainIcon then twP(tlMainIcon, 0.18, {ImageColor3 = Color3.fromRGB(255, 255, 255)}) end
 end
 _tlTrackConn(UserInputService.InputBegan:Connect(function(input, gpe)
 if input.KeyCode ~= Enum.KeyCode.K then
@@ -16789,27 +16774,7 @@ if input.KeyCode == Enum.KeyCode.K then
 if isOpen then closeBar() else openBar() end
 end
 end))
--- TL icon button click toggles the launcher (legacy SmartBar invisible btn)
--- FIX: Lock verhindert Doppel-Fire (MouseButton1Click + InputBegan:Touch feuern beide)
-local _mainBtnLock = false
-local function mainBtnActivate()
-    if _mainBtnLock then return end
-    _mainBtnLock = true
-    task.delay(0.35, function() _mainBtnLock = false end)
-    if isOpen then closeBar() else openBar() end
-end
-tlMainBtn.MouseButton1Click:Connect(mainBtnActivate)
-tlMainBtn.InputBegan:Connect(function(inp)
-if inp.UserInputType == Enum.UserInputType.Touch then
-    mainBtnActivate()
-end
-end)
-tlMainBtn.MouseEnter:Connect(function()
-twP(SmartBar, 0.12, {BackgroundColor3 = Color3.fromRGB(18, 18, 18)})
-end)
-tlMainBtn.MouseLeave:Connect(function()
-twP(SmartBar, 0.12, {BackgroundColor3 = Color3.fromRGB(10, 10, 10)})
-end)
+-- tlMainBtn-Connections entfernt (Button läuft über fpsWidget tlSmartHitbox)
 -- Drag entfernt — TL Logo ist nicht verschiebbar
 -- Mobile: globaler TouchTap-Handler entfernt — verursachte Konflikt mit tlSmartHitbox
 -- (jeder Touch auf den Hitbox-Bereich feuerte BEIDE Handler → Menu öffnet/schließt sofort)

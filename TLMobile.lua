@@ -16551,6 +16551,16 @@ local tabDefs = {
 local tabBtns, selectTab = {}, nil
 local TOTAL_CARDS_H = #tabDefs * (VL_H + VL_GAP) - VL_GAP
 
+-- ── Mobile/Tablet detection (muss VOR der for-Schleife stehen) ──────────
+local _ok_f, _vp_f = pcall(function() return workspace.CurrentCamera.ViewportSize end)
+_vp_f = _ok_f and _vp_f or Vector2.new(1920, 1080)
+local _touch_f = pcall(function() return UIS.TouchEnabled end) and UIS.TouchEnabled
+local _kbd_f   = pcall(function() return UIS.KeyboardEnabled end) and UIS.KeyboardEnabled
+local _short_f = math.min(_vp_f.X, _vp_f.Y)
+local _isMob   = _touch_f and not _kbd_f and _short_f < 500
+local _isTab   = _touch_f and not _kbd_f and _short_f >= 500 and _short_f < 900
+-- ────────────────────────────────────────────────────────────────────────
+
 for i, tab in ipairs(tabDefs) do
     local yOff = (i - 1) * (VL_H + VL_GAP)
 

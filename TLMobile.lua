@@ -16440,6 +16440,7 @@ else
     VL_ICON_W = 58
     VL_ICON_H = 58
 end
+end -- close do (VL dimensions)
 
 local VL_X_OFF  = -5
 

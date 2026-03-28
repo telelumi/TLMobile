@@ -16419,28 +16419,28 @@ do
     local _kbd   = pcall(function() return UIS.KeyboardEnabled end) and UIS.KeyboardEnabled
     local _short = math.min(_vp.X, _vp.Y)
     if _touch and not _kbd and _short < 500 then
-        -- Handy: gleiche Größe wie PC (war vorher 72x78 – zu groß)
-        VL_W      = 46
-        VL_H      = 50
-        VL_GAP    = 5
-        VL_ICON_W = 46
-        VL_ICON_H = 46
-    elseif _touch and not _kbd then
-        -- Tablet: leicht kleiner als PC
-        VL_W      = 52
-        VL_H      = 58
-        VL_GAP    = 6
-        VL_ICON_W = 52
-        VL_ICON_H = 52
-    else
-        -- PC: original
-        VL_W      = 58
-        VL_H      = 64
-        VL_GAP    = 6
-        VL_ICON_W = 58
-        VL_ICON_H = 58
-    end
+    -- Handy: kompakt
+    VL_W      = 34
+    VL_H      = 36
+    VL_GAP    = 3
+    VL_ICON_W = 34
+    VL_ICON_H = 34
+elseif _touch and not _kbd then
+    -- Tablet: etwas kleiner als PC
+    VL_W      = 40
+    VL_H      = 44
+    VL_GAP    = 4
+    VL_ICON_W = 40
+    VL_ICON_H = 40
+else
+    -- PC: original
+    VL_W      = 58
+    VL_H      = 64
+    VL_GAP    = 6
+    VL_ICON_W = 58
+    VL_ICON_H = 58
 end
+
 local VL_X_OFF  = -5
 
 -- Mobile/Tablet scaling
@@ -16578,10 +16578,16 @@ for i, tab in ipairs(tabDefs) do
 
     -- icon (image or emoji)
     local iconImg, iconLbl = nil, nil
+    local _ico   = (_isMob and 14) or (_isTab and 18) or 26
+    local _icoOff = math.floor(_ico / 2)
+    local _icoY  = (_isMob and 4)  or (_isTab and 6)  or 10
+    local _emoH  = (_isMob and 16) or (_isTab and 20) or 28
+    local _emoY  = (_isMob and 2)  or (_isTab and 4)  or 8
+    local _emoSz = (_isMob and 12) or (_isTab and 15) or 20
     if tab.img then
         iconImg = Instance.new("ImageLabel", card)
-        iconImg.Size             = UDim2.new(0, 26, 0, 26)
-        iconImg.Position         = UDim2.new(0.5, -13, 0, 10)
+        iconImg.Size             = UDim2.new(0, _ico, 0, _ico)
+        iconImg.Position         = UDim2.new(0.5, -_icoOff, 0, _icoY)
         iconImg.BackgroundTransparency = 1
         iconImg.Image            = tab.img
         iconImg.ImageColor3      = Color3.new(1, 1, 1)
@@ -16589,13 +16595,13 @@ for i, tab in ipairs(tabDefs) do
         iconImg.ZIndex           = 10
     else
         iconLbl = Instance.new("TextLabel", card)
-        iconLbl.Size             = UDim2.new(1, 0, 0, 28)
-        iconLbl.Position         = UDim2.new(0, 0, 0, 8)
+        iconLbl.Size             = UDim2.new(1, 0, 0, _emoH)
+        iconLbl.Position         = UDim2.new(0, 0, 0, _emoY)
         iconLbl.BackgroundTransparency = 1
         iconLbl.Text             = tab.icon or ""
         iconLbl.Font             = Enum.Font.GothamBlack
-        iconLbl.TextSize         = 20
-        iconLbl.TextColor3 = MGDIM()
+        iconLbl.TextSize         = _emoSz
+        iconLbl.TextColor3       = MGDIM()
         iconLbl.TextXAlignment   = Enum.TextXAlignment.Center
         iconLbl.ZIndex           = 10
     end

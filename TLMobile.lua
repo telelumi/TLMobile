@@ -1827,14 +1827,12 @@ pcall(function()
     local touch = UIS.TouchEnabled
     local kbd   = UIS.KeyboardEnabled
     local short = math.min(vp.X, vp.Y)
-    local long  = math.max(vp.X, vp.Y)
     _isMobile = touch and not kbd and short < 500
     _isTablet = touch and not kbd and short >= 500 and short < 900
     if _isMobile then
-        -- kurze Seite bestimmt verfügbaren Platz; PW = Breite des Emotes-Menüs
-        _uiScale = math.clamp(short / 480, 0.52, 0.82)
+        _uiScale = math.clamp((short * 0.85) / PW, 0.55, 1.1)
     elseif _isTablet then
-        _uiScale = math.clamp(short / 768, 0.68, 0.90)
+        _uiScale = math.clamp((short * 0.55) / PW, 0.75, 1.15)
     elseif vp.X < 1000 then
         _uiScale = math.clamp(vp.X / 1280, 0.75, 1.0)
     end
@@ -3212,84 +3210,45 @@ end
 local function makeRow(parent, yPos, labelText, badgeText, badgeColor, initOn, onToggle)
 return cleanRow(parent, yPos, labelText, badgeText, badgeColor, initOn, onToggle)
 end
--- ════════════════════════════════════════════════════════
--- ZENTRALE RESPONSIVE SIZING – einmalig berechnet, überall genutzt
--- ════════════════════════════════════════════════════════
+-- ── Responsive Panel- und Widget-Breite ──────────────
 local _TL_VP = {}
 do
     local _ok, _vp = pcall(function() return workspace.CurrentCamera.ViewportSize end)
     _vp = _ok and _vp or Vector2.new(1920, 1080)
-    local _uis = game:GetService("UserInputService")
+    local _uis   = game:GetService("UserInputService")
     local _touch = pcall(function() return _uis.TouchEnabled  end) and _uis.TouchEnabled
     local _kbd   = pcall(function() return _uis.KeyboardEnabled end) and _uis.KeyboardEnabled
-    local _sw    = _vp.X
-    local _sh    = _vp.Y
-    local _short = math.min(_sw, _sh)
-    local _long  = math.max(_sw, _sh)
+    local _short = math.min(_vp.X, _vp.Y)
+    local _long  = math.max(_vp.X, _vp.Y)
     local _isMob = _touch and not _kbd and _short < 500
     local _isTab = _touch and not _kbd and _short >= 500 and _short < 900
     local _isTch = _touch and not _kbd
 
-    -- Basis-Skalierungsfaktor
-    local _scale
-    if _isMob then
-        _scale = math.clamp(_short / 480, 0.52, 0.82)
-    elseif _isTab then
-        _scale = math.clamp(_short / 768, 0.68, 0.90)
-    else
-        _scale = 1.0
-    end
-
-    -- SmartBar (Tab-Strip) Breite
-    local _vlW
-    if _isMob then
-        _vlW = math.floor(math.clamp(_short * 0.115, 44, 56))
-    elseif _isTab then
-        _vlW = math.floor(math.clamp(_short * 0.090, 52, 62))
-    else
-        _vlW = 58
-    end
-    local _vlH   = math.floor(_vlW * 1.10)
-    local _vlGap = _isMob and 5 or 6
-
-    -- Panel-Breite: verfügbare Breite - SmartBar - Ränder
+    -- Panel-Breite: passt sich an verfügbare Breite an
+    -- SmartBar auf Mobile: VL_W=72 (klein) + 5 (gap) + 8 (pad) = 85px links reserviert, 8px rechts
     local _pnlW
     if _isTch then
-        local _avail = _long - _vlW - 5 - 8 - 8
+        local _vlWEst = _isMob and 72 or 66   -- VL_W-Schätzung (noch nicht definiert hier)
+        local _avail  = _long - _vlWEst - 5 - 8 - 8
         if _isMob then
-            _pnlW = math.floor(math.clamp(_avail, 210, 340))
+            _pnlW = math.floor(math.clamp(_avail, 220, 360))
         else
-            _pnlW = math.floor(math.clamp(_avail, 260, 420))
+            _pnlW = math.floor(math.clamp(_avail, 280, 430))
         end
     else
         _pnlW = 495
     end
 
-    -- fpsWidget / QA-Bar Breite
-    local _fwW
-    if _isMob then
-        _fwW = math.floor(math.clamp(_long * 0.52, 180, 260))
-    elseif _isTab then
-        _fwW = math.floor(math.clamp(_long * 0.42, 220, 288))
-    else
-        _fwW = 288
-    end
-    local _fwH = _isTch and 30 or 34
-
-    _TL_VP.sw      = _sw
-    _TL_VP.sh      = _sh
-    _TL_VP.short   = _short
-    _TL_VP.long    = _long
+    -- fpsWidget-Breite: per UIScale skaliert, daher Original-Größe behalten
+    -- Nur die Skalierung (scl) wird kleiner — FW_W bleibt 288, damit UIScale korrekt rechnet
     _TL_VP.isMob   = _isMob
     _TL_VP.isTab   = _isTab
     _TL_VP.isTouch = _isTch
-    _TL_VP.scale   = _scale
-    _TL_VP.vlW     = _vlW
-    _TL_VP.vlH     = _vlH
-    _TL_VP.vlGap   = _vlGap
+    _TL_VP.short   = _short
+    _TL_VP.long    = _long
     _TL_VP.pnlW    = _pnlW
-    _TL_VP.fwW     = _fwW
-    _TL_VP.fwH     = _fwH
+    _TL_VP.fwW     = 288   -- unveränderter Originalwert; UIScale übernimmt Skalierung
+    _TL_VP.fwH     = 34
 end
 
 -- FIX Mobile: Panel-Breite an Bildschirmbreite anpassen
@@ -16437,29 +16396,66 @@ end
 local BAR_W, BAR_H, BAR_R = 514, 58, 8   -- BAR_R 8 = eckiger Matrix-Look (panels still use this)
 local TAB_W = math.floor(BAR_W / 6)
 
--- ── Vertical Tab Launcher dimensions – aus _TL_VP ────
-local VL_W      = _TL_VP.vlW
-local VL_H      = _TL_VP.vlH
-local VL_GAP    = _TL_VP.vlGap
-local VL_ICON_W = _TL_VP.vlW
-local VL_ICON_H = _TL_VP.vlW
+-- ── Vertical Tab Launcher dimensions ─────────────────
+local VL_W, VL_H, VL_GAP, VL_ICON_W, VL_ICON_H
+do
+    local _ok, _vp = pcall(function() return workspace.CurrentCamera.ViewportSize end)
+    _vp = _ok and _vp or Vector2.new(1920, 1080)
+    local _touch = pcall(function() return UIS.TouchEnabled end) and UIS.TouchEnabled
+    local _kbd   = pcall(function() return UIS.KeyboardEnabled end) and UIS.KeyboardEnabled
+    local _short = math.min(_vp.X, _vp.Y)
+    if _touch and not _kbd and _short < 500 then
+        VL_W      = 72
+        VL_H      = 78
+        VL_GAP    = 8
+        VL_ICON_W = 72
+        VL_ICON_H = 72
+    elseif _touch and not _kbd then
+        VL_W      = 66
+        VL_H      = 72
+        VL_GAP    = 7
+        VL_ICON_W = 66
+        VL_ICON_H = 66
+    else
+        VL_W      = 58
+        VL_H      = 64
+        VL_GAP    = 6
+        VL_ICON_W = 58
+        VL_ICON_H = 58
+    end
+end
 local VL_X_OFF  = -5
 
 -- Mobile/Tablet scaling
-local _sbScale = _TL_VP.scale
+local _sbScale = 1.0
+do
+    local ok, vp = pcall(function() return workspace.CurrentCamera.ViewportSize end)
+    vp = ok and vp or Vector2.new(1920,1080)
+    local touch = pcall(function() return UIS.TouchEnabled end) and UIS.TouchEnabled
+    local kbd   = pcall(function() return UIS.KeyboardEnabled end) and UIS.KeyboardEnabled
+    local short = math.min(vp.X, vp.Y)
+    local long  = math.max(vp.X, vp.Y)
+    if touch and not kbd and short < 500 then
+        _sbScale = math.clamp(long * 0.88 / BAR_W, 0.55, 1.0)
+    elseif touch and not kbd then
+        _sbScale = math.clamp(long * 0.72 / BAR_W, 0.7, 1.0)
+    elseif vp.X < 900 then
+        _sbScale = math.clamp(vp.X * 0.88 / BAR_W, 0.6, 1.0)
+    end
+end
 
--- Panel-Position aus _TL_VP
+-- Panel-Position
 local _PNL_X   = 5 + VL_ICON_W + 8
 local PANEL_SHOW = UDim2.new(0, _PNL_X, 0, 5 + VL_ICON_H + 8)
-local PANEL_HIDE = UDim2.new(0, _PNL_X, 0, -(_TL_VP.sh or 600))
+local PANEL_HIDE = UDim2.new(0, _PNL_X, 0, -(600))
 
 -- ── Matrix Farbpalette ────────────────────────────────
 local function MG_B()  return C.accent  end
 local function MGA_B() return C.accent2 end
 local function MGDIM() return C.sub     end
 
--- ── FPS-Widget Dimensionen (aus _TL_VP) ──────────────
-local FW_W, FW_H, FW_X_OFFSET = _TL_VP.fwW, _TL_VP.fwH, -5
+-- ── FPS-Widget Dimensionen ────────────────────────────
+local FW_W, FW_H, FW_X_OFFSET = 288, 34, -5
 
 -- ── Launcher root: always-visible TL icon button ─────
 local SmartBar = Instance.new("Frame", ScreenGui)
@@ -16508,14 +16504,19 @@ tabCardsHolder.BorderSizePixel        = 0
 tabCardsHolder.ClipsDescendants       = true
 tabCardsHolder.Visible                = false
 tabCardsHolder.ZIndex                 = 7
--- FIX Mobile: Tab-Karten Position via _TL_VP
+-- FIX Mobile: Tab-Karten auf Mobile links von fpsWidget (unten), auf Desktop rechts oben
 do
-    if _TL_VP.isMob or _TL_VP.isTab then
-        -- Mobile: Tab-Karten wachsen nach OBEN vom fpsWidget
+    local _ok2, _vp2 = pcall(function() return workspace.CurrentCamera.ViewportSize end)
+    _vp2 = _ok2 and _vp2 or Vector2.new(1920, 1080)
+    local _touch2 = pcall(function() return UIS.TouchEnabled end) and UIS.TouchEnabled
+    local _kbd2   = pcall(function() return UIS.KeyboardEnabled end) and UIS.KeyboardEnabled
+    local _short2 = math.min(_vp2.X, _vp2.Y)
+    local _isMob2 = _touch2 and not _kbd2 and _short2 < 500
+    local _isTab2 = _touch2 and not _kbd2 and _short2 >= 500 and _short2 < 900
+    if _isMob2 or _isTab2 then
         tabCardsHolder.AnchorPoint = Vector2.new(1, 1)
-        tabCardsHolder.Position    = UDim2.new(1, -5, 1, -72 - _TL_VP.fwH - 8)
+        tabCardsHolder.Position    = UDim2.new(1, -5, 1, -80 - 34 - 8)
     else
-        -- Desktop: rechts oben, unterhalb des TL-Icons im fpsWidget
         tabCardsHolder.AnchorPoint = Vector2.new(0, 0)
         tabCardsHolder.Position    = UDim2.new(1, -5 - VL_W, 0, 5 + VL_ICON_H + 6)
     end
@@ -16834,18 +16835,22 @@ fpsWidget.BorderSizePixel        = 0
 fpsWidget.ZIndex                 = 20
 fpsWidget.Active                 = false  -- Frame passiert Inputs durch
 
--- Mobile/Tablet: scale and reposition via _TL_VP
+-- Mobile/Tablet: scale and reposition
 do
-    if _TL_VP.isTouch then
-        -- fpsWidget ist bereits in _TL_VP.fwW/_TL_VP.fwH skaliert; kein UIScale nötig
-        -- Position: auf Mobile unten-mitte, auf Tablet rechts oben
-        if _TL_VP.isMob then
-            fpsWidget.AnchorPoint = Vector2.new(0.5, 1)
-            fpsWidget.Position    = UDim2.new(0.5, 0, 1, -72)
-        else
-            fpsWidget.AnchorPoint = Vector2.new(1, 0)
-            fpsWidget.Position    = UDim2.new(1, -(5), 0, 5 + math.floor((VL_ICON_H - FW_H) / 2))
-        end
+    local ok, vp = pcall(function() return workspace.CurrentCamera.ViewportSize end)
+    vp = ok and vp or Vector2.new(1920,1080)
+    local touch = pcall(function() return UIS.TouchEnabled end) and UIS.TouchEnabled
+    local kbd   = pcall(function() return UIS.KeyboardEnabled end) and UIS.KeyboardEnabled
+    local short = math.min(vp.X, vp.Y)
+    local isMob = touch and not kbd and short < 500
+    local isTab = touch and not kbd and short >= 500 and short < 900
+    if isMob or isTab then
+        local scl = isMob and math.clamp((short*0.7)/FW_W, 0.5, 0.9)
+                           or  math.clamp((short*0.5)/FW_W, 0.65, 0.85)
+        local fwUIScale = Instance.new("UIScale", fpsWidget)
+        fwUIScale.Scale = scl
+        fpsWidget.AnchorPoint = Vector2.new(0.5, 1)
+        fpsWidget.Position    = UDim2.new(0.5, 0, 1, -80)
     else
         fpsWidget.AnchorPoint = Vector2.new(1, 0)
         fpsWidget.Position    = UDim2.new(1, -(5), 0, 5 + math.floor((VL_ICON_H - FW_H) / 2))

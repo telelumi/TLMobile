@@ -1,20 +1,29 @@
--- ANTI-FLING + EXPLOIT-NEUTRALIZER
--- Kombiniert CollisionGroup, Velocity Clamp & BodyForce Filter
+--[[
+    ULTIMATE ANTI-FLING v3
+    - Immune to high-velocity attacks, BodyVelocity, BodyForce, etc.
+    - Auto-repairs character parts and resets velocities
+    - Forced network ownership to client
+    - Collision group isolation
+    - Detects and neutralizes fling attempts instantly
+]]
 
--- CLEANUP
 if getgenv().ULTIMATE_ANTI_FLING_CLEANUP then
     getgenv().ULTIMATE_ANTI_FLING_CLEANUP()
 end
 
--- SERVICES
+-- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local PhysicsService = game:GetService("PhysicsService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 
 local LocalPlayer = Players.LocalPlayer
-local COLLISION_GROUP = "ULTIMATE_NO_COLLIDE"
+local COLLISION_GROUP = "ANTIFLING_NO_COLLIDE"
+local VELOCITY_THRESHOLD = 150          -- if velocity exceeds this, it's a fling attempt
+local REPAIR_DELAY = 0.2                -- time to wait after a fling before resetting
 
--- CREATE COLLISION GROUP
+-- Ensure collision group exists
 pcall(function()
     PhysicsService:CreateCollisionGroup(COLLISION_GROUP)
 end)
@@ -22,115 +31,241 @@ pcall(function()
     PhysicsService:CollisionGroupSetCollidable(COLLISION_GROUP, COLLISION_GROUP, false)
 end)
 
--- SET PART NO COLLIDE + GROUP
-local function disableCollision(part)
+-- Reference to character and parts
+local character = nil
+local humanoid = nil
+local rootPart = nil
+local parts = {}
+local isFlingProtected = false
+local repairCoroutine = nil
+local heartbeatConnection = nil
+local descendantConnection = nil
+
+-- Store original positions/velocities
+local lastPosition = nil
+local lastVelocity = Vector3.new()
+
+-- =================================================
+-- UTILITY FUNCTIONS
+-- =================================================
+
+-- Apply collision group and disable collisions
+local function applyCollisionProtection(part)
     if part:IsA("BasePart") then
-        pcall(function() part.CanCollide = false end)
-        pcall(function() PhysicsService:SetPartCollisionGroup(part, COLLISION_GROUP) end)
+        pcall(function()
+            part.CanCollide = false
+            PhysicsService:SetPartCollisionGroup(part, COLLISION_GROUP)
+        end)
     end
 end
 
--- ZERO OUT VELOCITY
-local function resetVelocity(part)
+-- Strip all forces and velocity from a part
+local function stripForces(part)
     if part:IsA("BasePart") then
-        part.Velocity = Vector3.new()
-        part.RotVelocity = Vector3.new()
+        pcall(function()
+            part.Velocity = Vector3.new()
+            part.RotVelocity = Vector3.new()
+        end)
     end
-end
-
--- REMOVE BODYFORCE/BODYVELOCITY/VECTORFORCE
-local function stripForces(obj)
-    for _, child in ipairs(obj:GetDescendants()) do
-        if child:IsA("BodyForce")
-        or child:IsA("BodyVelocity")
-        or child:IsA("BodyAngularVelocity")
-        or child:IsA("VectorForce")
-        or child:IsA("BodyGyro")
-        or child:IsA("LinearVelocity")
-        or child:IsA("AngularVelocity")
-        then
+    for _, child in ipairs(part:GetDescendants()) do
+        if child:IsA("BodyForce") or child:IsA("BodyVelocity") or child:IsA("BodyAngularVelocity") or
+           child:IsA("VectorForce") or child:IsA("BodyGyro") or child:IsA("LinearVelocity") or
+           child:IsA("AngularVelocity") then
             pcall(function() child:Destroy() end)
         end
     end
 end
 
--- APPLY ANTI-FLING TO CHARACTER
-local function applyAntiFling(character)
-    for _, part in ipairs(character:GetDescendants()) do
-        disableCollision(part)
-        resetVelocity(part)
+-- Reset character parts to a safe state
+local function resetCharacter()
+    if not character then return end
+    for _, part in ipairs(parts) do
+        if part and part.Parent then
+            stripForces(part)
+            applyCollisionProtection(part)
+        end
     end
-    stripForces(character)
+    if humanoid then
+        pcall(function()
+            humanoid.PlatformStand = false
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
+            humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+        end)
+    end
+    if rootPart then
+        lastVelocity = rootPart.Velocity
+        lastPosition = rootPart.Position
+    end
 end
 
--- DETECT EXPLOITER FORCES (neutralisiert)
-local function monitorForces(character)
-    -- Überwacht neu hinzugefügte BodyForces
-    character.DescendantAdded:Connect(function(desc)
-        if desc:IsA("BodyForce")
-        or desc:IsA("BodyVelocity")
-        or desc:IsA("VectorForce")
-        then
-            task.wait(0.01)
-            stripForces(character)
+-- Force network ownership of all character parts to client
+local function forceNetworkOwnership()
+    if not character then return end
+    for _, part in ipairs(parts) do
+        if part:IsA("BasePart") and part:GetNetworkOwner() ~= LocalPlayer then
+            pcall(function()
+                part:SetNetworkOwner(LocalPlayer)
+            end)
+        end
+    end
+end
+
+-- Check if a part is being flung (excessive velocity)
+local function isFlingAttempt(part)
+    if part:IsA("BasePart") and part.Velocity.Magnitude > VELOCITY_THRESHOLD then
+        return true
+    end
+    return false
+end
+
+-- Immediate reaction to fling: cancel velocity and forces
+local function neutralizeFling(part)
+    if part:IsA("BasePart") then
+        part.Velocity = Vector3.new()
+        part.RotVelocity = Vector3.new()
+        stripForces(part)
+        -- Optional: slight bounce to prevent sinking
+        part:ApplyImpulse(Vector3.new(0, 5, 0))
+    end
+end
+
+-- =================================================
+-- FLING DETECTION & NEUTRALIZATION LOOP
+-- =================================================
+local function monitorFling()
+    if not character then return end
+    local anyFling = false
+    for _, part in ipairs(parts) do
+        if part and part.Parent and isFlingAttempt(part) then
+            anyFling = true
+            neutralizeFling(part)
+        end
+    end
+    if anyFling then
+        -- Force full reset
+        resetCharacter()
+        forceNetworkOwnership()
+    end
+end
+
+-- =================================================
+-- CHARACTER SETUP
+-- =================================================
+local function setupCharacter(char)
+    character = char
+    humanoid = char:FindFirstChildOfClass("Humanoid")
+    rootPart = char:FindFirstChild("HumanoidRootPart")
+    
+    if not humanoid or not rootPart then
+        return
+    end
+    
+    -- Gather all BaseParts
+    parts = {}
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") then
+            table.insert(parts, part)
+        end
+    end
+    
+    -- Apply initial protection
+    resetCharacter()
+    forceNetworkOwnership()
+    
+    -- Monitor newly added parts (accessories, etc.)
+    if descendantConnection then
+        descendantConnection:Disconnect()
+    end
+    descendantConnection = char.DescendantAdded:Connect(function(desc)
+        if desc:IsA("BasePart") then
+            table.insert(parts, desc)
+            applyCollisionProtection(desc)
+            stripForces(desc)
+            if desc:IsA("BasePart") and desc:GetNetworkOwner() ~= LocalPlayer then
+                pcall(function() desc:SetNetworkOwner(LocalPlayer) end)
+            end
+        end
+        if desc:IsA("BodyForce") or desc:IsA("BodyVelocity") then
+            pcall(function() desc:Destroy() end)
         end
     end)
 end
 
--- FORCE TRANSFER (wenn jemand dich flingt)
-local function forceTransfer(targetChar)
-    if targetChar and targetChar:FindFirstChild("HumanoidRootPart") then
-        local hrp = targetChar.HumanoidRootPart
-        hrp.Velocity = LocalPlayer.Character.HumanoidRootPart.Velocity
-        hrp.RotVelocity = LocalPlayer.Character.HumanoidRootPart.RotVelocity
+-- =================================================
+-- MAIN LOOP
+-- =================================================
+local function startProtection()
+    if heartbeatConnection then
+        heartbeatConnection:Disconnect()
     end
-end
-
--- APPLY TO ALL PLAYERS
-local function handlePlayer(plr)
-    if plr.Character then
-        applyAntiFling(plr.Character)
-        monitorForces(plr.Character)
-    end
-    plr.CharacterAdded:Connect(function(char)
-        task.wait(0.1)
-        applyAntiFling(char)
-        monitorForces(char)
+    heartbeatConnection = RunService.Heartbeat:Connect(function()
+        if character and character.Parent then
+            monitorFling()
+            -- Additional: ensure collision group is always applied
+            for _, part in ipairs(parts) do
+                if part and part.Parent and part:IsA("BasePart") then
+                    if part.CanCollide ~= false then
+                        part.CanCollide = false
+                    end
+                    local group = pcall(function() return PhysicsService:GetPartCollisionGroup(part) end)
+                    if group ~= COLLISION_GROUP then
+                        pcall(function() PhysicsService:SetPartCollisionGroup(part, COLLISION_GROUP) end)
+                    end
+                end
+            end
+        end
     end)
 end
 
--- HEARTBEAT LOOP (permanent enforce)
-local heartbeatConn
-heartbeatConn = RunService.Heartbeat:Connect(function()
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr.Character then
-            applyAntiFling(plr.Character)
-        end
-    end
+-- =================================================
+-- RESPAWN HANDLING
+-- =================================================
+LocalPlayer.CharacterAdded:Connect(function(newChar)
+    task.wait(0.2)
+    setupCharacter(newChar)
+    startProtection()
 end)
 
+-- =================================================
 -- INITIAL SETUP
-for _, plr in ipairs(Players:GetPlayers()) do
-    if plr ~= LocalPlayer then
-        handlePlayer(plr)
-    end
-end
-
-Players.PlayerAdded:Connect(handlePlayer)
-
+-- =================================================
 if LocalPlayer.Character then
-    applyAntiFling(LocalPlayer.Character)
-    monitorForces(LocalPlayer.Character)
+    setupCharacter(LocalPlayer.Character)
 end
-LocalPlayer.CharacterAdded:Connect(function(char)
-    task.wait(0.1)
-    applyAntiFling(char)
-    monitorForces(char)
-end)
+startProtection()
 
+-- =================================================
 -- CLEANUP FUNCTION
+-- =================================================
 getgenv().ULTIMATE_ANTI_FLING_CLEANUP = function()
-    if heartbeatConn then
-        pcall(function() heartbeatConn:Disconnect() end)
+    if heartbeatConnection then
+        heartbeatConnection:Disconnect()
     end
+    if descendantConnection then
+        descendantConnection:Disconnect()
+    end
+    if repairCoroutine then
+        task.cancel(repairCoroutine)
+    end
+    -- Optional: reset collision groups
+    pcall(function()
+        PhysicsService:SetCollisionGroupCollidable(COLLISION_GROUP, COLLISION_GROUP, true)
+    end)
 end
+
+-- =================================================
+-- NOTIFICATION (optional)
+-- =================================================
+local function notify(msg)
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "Anti-Fling",
+        Text = msg,
+        Duration = 3
+    })
+end
+
+-- Optional: display a brief message on load
+task.spawn(function()
+    wait(1)
+    notify("Ultimate Anti-Fling Activated")
+end)

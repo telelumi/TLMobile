@@ -15,19 +15,17 @@ local PhysicsService = game:GetService("PhysicsService")
 local LocalPlayer = Players.LocalPlayer
 
 --==================================================
--- SETTINGS (TUNED)
+-- SETTINGS
 --==================================================
-local MAX_LINEAR = 120
-local MAX_ANGULAR = 60
-local HARD_CLAMP = 250
+local MAX_LINEAR = 90
+local MAX_ANGULAR = 45
+local HARD_LIMIT = 180
 
-local IMPULSE_POWER = 1.15
-local IMPULSE_COOLDOWN = 0.15
+local ACCEL_TRIGGER = 500
+local IMPULSE_POWER = 1.25
+local COOLDOWN = 0.12
 
-local HISTORY_SIZE = 6
-local ACCEL_TRIGGER = 650
-
-local COLLISION_GROUP = "AF_PROTECT"
+local GROUP = "AF_GHOST"
 
 --==================================================
 -- STATE
@@ -37,54 +35,63 @@ local velocityHistory = {}
 local lastImpulse = 0
 
 --==================================================
--- COLLISION SYSTEM (ANTI PLAYER CONTACT)
+-- COLLISION GROUP (GHOST MODE)
 --==================================================
 pcall(function()
-    PhysicsService:CreateCollisionGroup(COLLISION_GROUP)
+    PhysicsService:CreateCollisionGroup(GROUP)
 end)
 
 pcall(function()
-    PhysicsService:CollisionGroupSetCollidable(COLLISION_GROUP, COLLISION_GROUP, false)
+    PhysicsService:CollisionGroupSetCollidable(GROUP, GROUP, false)
 end)
 
-local function applyNoCollision(char)
+--==================================================
+-- ANTI TARGET SYSTEM (CORE)
+-- verhindert Targeting durch Exploits
+--==================================================
+local function makeUntargetable(char)
     for _, v in ipairs(char:GetDescendants()) do
         if v:IsA("BasePart") then
             pcall(function()
                 v.CanCollide = false
-                PhysicsService:SetPartCollisionGroup(v, COLLISION_GROUP)
+                v.Massless = true
+                v.CanQuery = false
+                v.CanTouch = false
+                v:SetNetworkOwner(LocalPlayer)
+                PhysicsService:SetPartCollisionGroup(v, GROUP)
+            end)
+        elseif v:IsA("Humanoid") then
+            pcall(function()
+                v.Name = "Humanoid_" .. math.random(1000,9999)
             end)
         end
     end
 end
 
 --==================================================
--- VELOCITY ANALYSIS
+-- HISTORY
 --==================================================
-local function pushHistory(v, a)
+local function push(v)
     table.insert(velocityHistory, {
         t = os.clock(),
-        v = v,
-        a = a
+        v = v
     })
-    if #velocityHistory > HISTORY_SIZE then
+    if #velocityHistory > 6 then
         table.remove(velocityHistory, 1)
     end
 end
 
-local function getAcceleration()
+local function accel()
     if #velocityHistory < 2 then return 0 end
     local a = velocityHistory[#velocityHistory]
     local b = velocityHistory[#velocityHistory - 1]
-
     local dt = a.t - b.t
     if dt <= 0 then return 0 end
-
     return (a.v - b.v) / dt
 end
 
 --==================================================
--- CORE PROTECTION
+-- CORE ANTI FLING
 --==================================================
 local function protect(hrp)
     local velVec = hrp.AssemblyLinearVelocity
@@ -93,17 +100,17 @@ local function protect(hrp)
     local vel = velVec.Magnitude
     local ang = angVec.Magnitude
 
-    pushHistory(vel, ang)
-    local accel = getAcceleration()
+    push(vel)
+    local a = accel()
 
-    -- HARD LIMIT (EXTREME FLING)
-    if vel > HARD_CLAMP then
-        hrp.AssemblyLinearVelocity = velVec.Unit * MAX_LINEAR
+    -- HARD STOP
+    if vel > HARD_LIMIT then
+        hrp.AssemblyLinearVelocity = Vector3.zero
         hrp.AssemblyAngularVelocity = Vector3.zero
         return
     end
 
-    -- NORMAL LIMIT
+    -- LIMITS
     if vel > MAX_LINEAR then
         hrp.AssemblyLinearVelocity = velVec.Unit * MAX_LINEAR
     end
@@ -112,10 +119,10 @@ local function protect(hrp)
         hrp.AssemblyAngularVelocity = Vector3.zero
     end
 
-    -- ACCELERATION BASED DETECTION
-    if accel > ACCEL_TRIGGER and vel > 90 then
+    -- SMART IMPULSE
+    if a > ACCEL_TRIGGER and vel > 70 then
         local now = os.clock()
-        if now - lastImpulse > IMPULSE_COOLDOWN then
+        if now - lastImpulse > COOLDOWN then
             lastImpulse = now
 
             local counter = -velVec.Unit * (vel * IMPULSE_POWER)
@@ -127,70 +134,51 @@ local function protect(hrp)
 end
 
 --==================================================
--- NETWORK STABILIZER (ANTI EXPLOIT SYNC)
+-- HUMANOID STABILIZER
 --==================================================
-local function stabilize(char)
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if hum then
-        hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
-        hum:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding, false)
-        hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
-        hum:SetStateEnabled(Enum.HumanoidStateType.Freefall, true)
-    end
+local function stabilize(hum)
+    hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+    hum:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding, false)
+    hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+    hum:SetStateEnabled(Enum.HumanoidStateType.Freefall, true)
 end
 
 --==================================================
--- MAIN LOOP (MULTI LAYER PROTECTION)
+-- MAIN
 --==================================================
 local function start(char)
     local hrp = char:WaitForChild("HumanoidRootPart")
+    local hum = char:FindFirstChildOfClass("Humanoid")
 
     velocityHistory = {}
     lastImpulse = 0
 
-    applyNoCollision(char)
-    stabilize(char)
+    if hum then
+        stabilize(hum)
+    end
+
+    makeUntargetable(char)
 
     connection = RunService.Heartbeat:Connect(function()
         if not char.Parent then return end
 
-        -- APPLY EVERY FRAME (ANTI BYPASS)
-        applyNoCollision(char)
+        -- ANTI TARGET PER FRAME (ANTI BYPASS)
+        makeUntargetable(char)
 
         protect(hrp)
     end)
 end
 
 --==================================================
--- PLAYER HANDLING
+-- INIT
 --==================================================
 if LocalPlayer.Character then
     start(LocalPlayer.Character)
 end
 
 LocalPlayer.CharacterAdded:Connect(function(char)
-    task.wait(0.3)
+    task.wait(0.2)
     start(char)
-end)
-
--- APPLY TO OTHERS (ANTI CONTACT FORCE)
-for _, plr in ipairs(Players:GetPlayers()) do
-    if plr ~= LocalPlayer then
-        plr.CharacterAdded:Connect(function(char)
-            task.wait(0.5)
-            applyNoCollision(char)
-        end)
-    end
-end
-
-Players.PlayerAdded:Connect(function(plr)
-    plr.CharacterAdded:Connect(function(char)
-        task.wait(0.5)
-        applyNoCollision(char)
-    end)
 end)
 
 --==================================================

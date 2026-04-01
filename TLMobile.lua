@@ -1,6 +1,6 @@
 --==================================================
--- ULTIMATE ANTI-FLING v9 - ADVANCED REFLECTION
--- Continuous fling blocking + force reflection to attacker
+-- ULTIMATE ANTI-FLING v10 - COMPLETE IMMUNITY
+-- Specifically designed to counter Kilasik Multi-Fling & all variants
 --==================================================
 
 if getgenv().AntiFling_Cleanup then
@@ -11,13 +11,19 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local PhysicsService = game:GetService("PhysicsService")
 local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 
 local lp = Players.LocalPlayer
-local GROUP = "ANTIFLING_V9"
+local GROUP = "ANTIFLING_V10"
 
 pcall(function()
     PhysicsService:CreateCollisionGroup(GROUP)
     PhysicsService:CollisionGroupSetCollidable(GROUP, GROUP, false)
+    for _, group in ipairs(PhysicsService:GetCollisionGroups()) do
+        if group.Name ~= GROUP and group.Name ~= "Default" then
+            pcall(function() PhysicsService:CollisionGroupSetCollidable(GROUP, group.Name, false) end)
+        end
+    end
 end)
 
 -- Persistent state
@@ -29,12 +35,15 @@ local lastCheck = 0
 local flingCount = 0
 local lastResetPos = nil
 local wasFlinging = false
-local groundedTimer = 0
 local lastAttacker = nil
 local attackHistory = {}
 local reflectionCooldown = 0
+local positionLock = false
+local lockTimer = 0
+local originalWalkSpeed = 16
+local frozen = false
 
--- Advanced force killing
+-- Kill all forces (enhanced)
 local function killForces(part)
     if not part or not part.Parent then return end
     pcall(function()
@@ -48,7 +57,8 @@ local function killForces(part)
         for _, v in ipairs(obj:GetChildren()) do
             if v:IsA("BodyForce") or v:IsA("BodyVelocity") or v:IsA("BodyAngularVelocity") or
                v:IsA("VectorForce") or v:IsA("BodyGyro") or v:IsA("LinearVelocity") or
-               v:IsA("AngularVelocity") or v:IsA("Attachment") or v:IsA("Constraint") then
+               v:IsA("AngularVelocity") or v:IsA("Attachment") or v:IsA("Constraint") or
+               v:IsA("RopeConstraint") or v:IsA("SpringConstraint") then
                 pcall(function() v:Destroy() end)
             end
             if #v:GetChildren() > 0 then
@@ -65,6 +75,7 @@ local function protectPart(part)
         part.CanCollide = false
         part.CanTouch = false
         part.Massless = true
+        part.CanQuery = false
         PhysicsService:SetPartCollisionGroup(part, GROUP)
         part:SetNetworkOwner(lp)
         killForces(part)
@@ -94,30 +105,129 @@ local function protectChar(char)
             hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
             hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
             hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+            hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, true)
             hum.PlatformStand = false
             hum.AutoRotate = true
+            hum.Sit = false
+            if not frozen then
+                hum.WalkSpeed = originalWalkSpeed
+            end
         end)
     end
     
     forceOwnershipAll(char)
 end
 
-local function isGrounded(char)
+-- Anti-Kilasik specific: prevents the FPos function from working
+local function antiKilasicPositionLock(char)
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    -- Kilasik uses RootPart.CFrame = CFrame.new(BasePart.Position) * Pos * Ang
+    -- We detect rapid CFrame changes and revert them
+    if lastResetPos then
+        local delta = (hrp.Position - lastResetPos).Magnitude
+        if delta > 15 then
+            hrp.CFrame = CFrame.new(lastResetPos)
+            hrp.AssemblyLinearVelocity = Vector3.new()
+            hrp.AssemblyAngularVelocity = Vector3.new()
+            positionLock = true
+            lockTimer = 0.5
+        end
+    end
+    
+    if positionLock then
+        lockTimer = lockTimer - 0.016
+        if lockTimer <= 0 then
+            positionLock = false
+        end
+    end
+end
+
+-- Detect Kilasik's BodyVelocity injection
+local function detectKilasicForce(char)
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
     
-    local rayOrigin = hrp.Position
-    local rayDirection = Vector3.new(0, -5, 0)
-    local ray = Ray.new(rayOrigin, rayDirection)
-    local hit = workspace:FindPartOnRay(ray, char)
-    
-    return hit ~= nil
+    for _, v in ipairs(hrp:GetChildren()) do
+        if v:IsA("BodyVelocity") and v.MaxForce == Vector3.new(9e9, 9e9, 9e9) then
+            return true
+        end
+    end
+    return false
 end
 
--- Detect who is flinging you
+-- Anti-freeze protection
+local function preventFreeze(char)
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    
+    if hum.WalkSpeed < 1 and not frozen then
+        frozen = true
+        hum.WalkSpeed = 16
+        hum.JumpPower = 50
+        task.wait(0.5)
+        frozen = false
+    end
+end
+
+-- Anti-clipping (prevents underground)
+local function antiClip(char)
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    local pos = hrp.Position
+    if pos.Y < 0 then
+        hrp.CFrame = CFrame.new(pos.X, 5, pos.Z)
+        hrp.AssemblyLinearVelocity = Vector3.new()
+    end
+    
+    local rayOrigin = pos
+    local rayDirection = Vector3.new(0, -6, 0)
+    local ray = Ray.new(rayOrigin, rayDirection)
+    local hit, hitPos = workspace:FindPartOnRayWithIgnoreList(ray, {char})
+    
+    if hit and hitPos and (pos.Y - hitPos.Y) < 1 then
+        hrp.CFrame = CFrame.new(pos.X, hitPos.Y + 2.5, pos.Z)
+    end
+end
+
+-- Reflect force back to attacker (enhanced for Kilasik)
+local function reflectToAttacker(attacker, forceMagnitude)
+    if not attacker or not attacker.Character then return end
+    
+    local attackerHrp = attacker.Character:FindFirstChild("HumanoidRootPart")
+    if not attackerHrp then return end
+    
+    local myHrp = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+    if not myHrp then return end
+    
+    local direction = (attackerHrp.Position - myHrp.Position).Unit
+    local reflectForce = direction * math.min(forceMagnitude * 1.5, 400)
+    
+    pcall(function()
+        attackerHrp.AssemblyLinearVelocity = reflectForce
+        attackerHrp:ApplyImpulse(reflectForce * 15)
+        
+        local attackerHum = attacker.Character:FindFirstChildOfClass("Humanoid")
+        if attackerHum then
+            attackerHum.PlatformStand = true
+            task.wait(0.15)
+            attackerHum.PlatformStand = false
+        end
+        
+        for _, v in ipairs(attacker.Character:GetDescendants()) do
+            if v:IsA("BodyVelocity") or v:IsA("BodyForce") then
+                v:Destroy()
+            end
+        end
+    end)
+end
+
+-- Detect attacker (who is flinging you)
 local function detectAttacker()
     local nearest = nil
-    local nearestDist = 20
+    local nearestDist = 30
     
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= lp and plr.Character then
@@ -139,68 +249,7 @@ local function detectAttacker()
     return nearest
 end
 
--- Reflect force back to attacker
-local function reflectToAttacker(attacker, forceMagnitude)
-    if not attacker or not attacker.Character then return end
-    
-    local attackerHrp = attacker.Character:FindFirstChild("HumanoidRootPart")
-    if not attackerHrp then return end
-    
-    local myHrp = lp.Character:FindFirstChild("HumanoidRootPart")
-    if not myHrp then return end
-    
-    local direction = (attackerHrp.Position - myHrp.Position).Unit
-    local reflectForce = direction * math.min(forceMagnitude * 1.2, 250)
-    
-    pcall(function()
-        attackerHrp.AssemblyLinearVelocity = reflectForce
-        attackerHrp:ApplyImpulse(reflectForce * 10)
-        
-        local attackerHum = attacker.Character:FindFirstChildOfClass("Humanoid")
-        if attackerHum then
-            attackerHum.PlatformStand = true
-            task.wait(0.1)
-            attackerHum.PlatformStand = false
-        end
-    end)
-end
-
--- Anti-clipping (prevents being pushed underground)
-local function antiClip(char)
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    
-    local pos = hrp.Position
-    local rayOrigin = pos
-    local rayDirection = Vector3.new(0, -8, 0)
-    local ray = Ray.new(rayOrigin, rayDirection)
-    local hit, hitPos = workspace:FindPartOnRayWithIgnoreList(ray, {char})
-    
-    if hit and hitPos then
-        local groundLevel = hitPos.Y
-        if pos.Y - groundLevel < 1.5 then
-            hrp.CFrame = CFrame.new(pos.X, groundLevel + 2.5, pos.Z)
-            hrp.AssemblyLinearVelocity = Vector3.new()
-        end
-    end
-    
-    if pos.Y < 0 then
-        hrp.CFrame = CFrame.new(pos.X, 5, pos.Z)
-        hrp.AssemblyLinearVelocity = Vector3.new()
-    end
-end
-
--- Position anchoring during fling spikes
-local function anchorDuringFling(hrp, isFlinging)
-    if isFlinging then
-        pcall(function()
-            hrp.Anchored = true
-            task.wait(0.02)
-            hrp.Anchored = false
-        end)
-    end
-end
-
+-- Main protection scanner
 local function startForceScanner(char)
     if forceConn then forceConn:Disconnect() end
     
@@ -214,26 +263,20 @@ local function startForceScanner(char)
         
         if hrp then
             local velMag = hrp.AssemblyLinearVelocity.Magnitude
-            local grounded = isGrounded(char)
+            local hasKilasicForce = detectKilasicForce(char)
             
-            if grounded then
-                groundedTimer = math.min(groundedTimer + 0.016, 1)
-            else
-                groundedTimer = math.max(groundedTimer - 0.016, 0)
+            -- Adaptive threshold
+            local threshold = 85
+            if flingCount > 2 or hasKilasicForce then
+                threshold = 60
             end
             
-            local threshold = 90
-            if flingCount > 2 then
-                threshold = 70
-            end
-            
-            -- Fling detection with attacker tracking
-            if velMag > threshold then
+            -- Fling detection
+            if velMag > threshold or hasKilasicForce then
                 if not wasFlinging then
                     wasFlinging = true
                     flingCount = flingCount + 1
                     
-                    -- Detect and record attacker
                     local attacker = detectAttacker()
                     if attacker then
                         lastAttacker = attacker
@@ -242,7 +285,7 @@ local function startForceScanner(char)
                     end
                 end
                 
-                -- Aggressive counter
+                -- IMMEDIATE force kill
                 hrp.AssemblyLinearVelocity = Vector3.new()
                 hrp.AssemblyAngularVelocity = Vector3.new()
                 killForces(hrp)
@@ -253,27 +296,32 @@ local function startForceScanner(char)
                     end
                 end
                 
-                -- Position lock with smoothing
-                local currentPos = hrp.Position
+                -- Position lock
                 if lastResetPos then
-                    local delta = (currentPos - lastResetPos).Magnitude
-                    if delta > 12 then
+                    local delta = (hrp.Position - lastResetPos).Magnitude
+                    if delta > 10 then
                         hrp.CFrame = CFrame.new(lastResetPos)
                     end
                 else
-                    lastResetPos = currentPos
+                    lastResetPos = hrp.Position
                 end
                 
-                -- Micro-anchor to prevent teleport clipping
-                anchorDuringFling(hrp, true)
+                -- Anti-Kilasik specific: remove BodyVelocity immediately
+                if hasKilasicForce then
+                    for _, v in ipairs(hrp:GetChildren()) do
+                        if v:IsA("BodyVelocity") then
+                            v:Destroy()
+                        end
+                    end
+                end
                 
-                -- Reflect force to attacker (if persistent fling)
-                if flingCount > 2 and lastAttacker and tick() - reflectionCooldown > 0.5 then
+                -- Reflect to attacker (with cooldown)
+                if flingCount > 1 and lastAttacker and tick() - reflectionCooldown > 0.3 then
                     reflectionCooldown = tick()
                     reflectToAttacker(lastAttacker, velMag)
                 end
                 
-                -- Anti-stun: force getting up
+                -- Anti-stun
                 if hum then
                     local state = hum:GetState()
                     if state == Enum.HumanoidStateType.Ragdoll or state == Enum.HumanoidStateType.FallingDown then
@@ -285,28 +333,36 @@ local function startForceScanner(char)
                 end
                 
                 local now = tick()
-                if now - lastCheck > 0.5 then
+                if now - lastCheck > 0.3 then
                     lastCheck = now
                 end
             else
                 wasFlinging = false
                 if flingCount > 0 then
-                    flingCount = flingCount - 0.25
+                    flingCount = flingCount - 0.2
                 end
             end
             
-            -- Anti-clipping (prevents underground glitch)
+            -- Anti-Kilasik position lock
+            antiKilasicPositionLock(char)
+            
+            -- Anti-clip
             antiClip(char)
             
-            -- Position anchor (teleport prevention)
-            if lastResetPos and (hrp.Position - lastResetPos).Magnitude > 20 then
-                hrp.CFrame = CFrame.new(lastResetPos)
-                hrp.AssemblyLinearVelocity = Vector3.new()
+            -- Prevent freeze
+            if hum then
+                preventFreeze(char)
+            end
+            
+            -- Update last position
+            if not wasFlinging then
+                lastResetPos = hrp.Position
             end
         end
     end)
 end
 
+-- Monitor for new force objects (Kilasic's BodyVelocity)
 local function monitorPartAddition(char)
     if partMonitor then partMonitor:Disconnect() end
     
@@ -314,62 +370,76 @@ local function monitorPartAddition(char)
         if desc:IsA("BasePart") then
             protectPart(desc)
         end
-        if desc:IsA("BodyForce") or desc:IsA("BodyVelocity") or desc:IsA("VectorForce") or
+        
+        -- Kill Kilasik's BodyVelocity instantly
+        if desc:IsA("BodyVelocity") or desc:IsA("BodyForce") or desc:IsA("VectorForce") or
            desc:IsA("BodyAngularVelocity") or desc:IsA("LinearVelocity") then
             task.wait(0.01)
             pcall(function() desc:Destroy() end)
             flingCount = flingCount + 1
             
-            -- If force object added, reflect to attacker
             local attacker = detectAttacker()
-            if attacker and tick() - reflectionCooldown > 0.3 then
+            if attacker and tick() - reflectionCooldown > 0.2 then
                 reflectionCooldown = tick()
-                reflectToAttacker(attacker, 150)
+                reflectToAttacker(attacker, 200)
             end
         end
+        
         if desc:IsA("Attachment") or desc:IsA("Constraint") then
             pcall(function() desc:Destroy() end)
         end
     end)
 end
 
+-- Periodic reset (prevents accumulation)
 local function startPeriodicReset(char)
     task.spawn(function()
         while active and char and char.Parent do
-            wait(1.2)
+            wait(1)
             local hrp = char:FindFirstChild("HumanoidRootPart")
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            
             if hrp then
-                if hrp.AssemblyLinearVelocity.Magnitude > 35 then
+                if hrp.AssemblyLinearVelocity.Magnitude > 30 then
                     hrp.AssemblyLinearVelocity = Vector3.new()
                     hrp.AssemblyAngularVelocity = Vector3.new()
                 end
                 lastResetPos = hrp.Position
                 antiClip(char)
             end
+            
+            if hum and hum.PlatformStand then
+                hum.PlatformStand = false
+            end
         end
     end)
 end
 
--- Periodic attacker punisher (for persistent flingers)
+-- Attacker punisher (continuous flingers)
 local function startAttackerPunisher()
     task.spawn(function()
         while active do
-            wait(2)
-            if flingCount > 3 and lastAttacker and lastAttacker.Character then
+            wait(1.5)
+            if flingCount > 2 and lastAttacker and lastAttacker.Character then
                 local attackerHrp = lastAttacker.Character:FindFirstChild("HumanoidRootPart")
                 if attackerHrp then
-                    -- Strong reflection
                     local myHrp = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
                     if myHrp then
                         local dir = (attackerHrp.Position - myHrp.Position).Unit
-                        attackerHrp.AssemblyLinearVelocity = dir * 300
-                        attackerHrp:ApplyImpulse(dir * 500)
+                        attackerHrp.AssemblyLinearVelocity = dir * 500
+                        attackerHrp:ApplyImpulse(dir * 800)
                         
                         local attackerHum = lastAttacker.Character:FindFirstChildOfClass("Humanoid")
                         if attackerHum then
                             attackerHum.PlatformStand = true
-                            task.wait(0.2)
+                            task.wait(0.25)
                             attackerHum.PlatformStand = false
+                        end
+                        
+                        for _, v in ipairs(lastAttacker.Character:GetDescendants()) do
+                            if v:IsA("BodyVelocity") or v:IsA("BodyForce") then
+                                v:Destroy()
+                            end
                         end
                     end
                 end
@@ -378,6 +448,7 @@ local function startAttackerPunisher()
     end)
 end
 
+-- Main start
 local function start()
     if conn then conn:Disconnect() end
     if forceConn then forceConn:Disconnect() end
@@ -403,7 +474,7 @@ local function start()
             
             local hrp = currentChar:FindFirstChild("HumanoidRootPart")
             if hrp then
-                if hrp.AssemblyLinearVelocity.Magnitude > 80 then
+                if hrp.AssemblyLinearVelocity.Magnitude > 70 then
                     hrp.AssemblyLinearVelocity = Vector3.new()
                     hrp.AssemblyAngularVelocity = Vector3.new()
                 end
@@ -412,12 +483,15 @@ local function start()
     end)
 end
 
+-- Respawn handling
 lp.CharacterAdded:Connect(function(char)
     wait(0.3)
     flingCount = 0
     lastResetPos = nil
     wasFlinging = false
     lastAttacker = nil
+    positionLock = false
+    frozen = false
     start()
 end)
 
@@ -425,6 +499,7 @@ if lp.Character then
     start()
 end
 
+-- Cleanup
 getgenv().AntiFling_Cleanup = function()
     active = false
     if conn then conn:Disconnect() end
@@ -436,7 +511,7 @@ getgenv().AntiFling_Cleanup = function()
 end
 
 game:GetService("StarterGui"):SetCore("SendNotification", {
-    Title = "Anti-Fling v9",
-    Text = "Active | Reflection ON | Anti-Clip",
+    Title = "Anti-Fling v10",
+    Text = "Immunity | Reflection ON | Anti-Freeze",
     Duration = 3
 })

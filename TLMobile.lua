@@ -1,225 +1,136 @@
---==================================================
--- CLEAN START
---==================================================
-if getgenv().AntiFling_Cleanup then
-    getgenv().AntiFling_Cleanup()
+-- ANTI-FLING + EXPLOIT-NEUTRALIZER
+-- Kombiniert CollisionGroup, Velocity Clamp & BodyForce Filter
+
+-- CLEANUP
+if getgenv().ULTIMATE_ANTI_FLING_CLEANUP then
+    getgenv().ULTIMATE_ANTI_FLING_CLEANUP()
 end
 
---==================================================
 -- SERVICES
---==================================================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local PhysicsService = game:GetService("PhysicsService")
 
 local LocalPlayer = Players.LocalPlayer
+local COLLISION_GROUP = "ULTIMATE_NO_COLLIDE"
 
---==================================================
--- SETTINGS
---==================================================
-local MAX_VEL = 85
-local MAX_ANG = 45
-local TELEPORT_DIST = 30
-local ACCEL_TRIGGER = 500
-local IMPULSE_MULT = 1.4
-local COOLDOWN = 0.12
+-- CREATE COLLISION GROUP
+pcall(function()
+    PhysicsService:CreateCollisionGroup(COLLISION_GROUP)
+end)
+pcall(function()
+    PhysicsService:CollisionGroupSetCollidable(COLLISION_GROUP, COLLISION_GROUP, false)
+end)
 
---==================================================
--- STATE
---==================================================
-local connection
-local lastSafeCF
-local lastImpulse = 0
-local history = {}
-
---==================================================
--- HISTORY SYSTEM
---==================================================
-local function push(v)
-    table.insert(history, {t = os.clock(), v = v})
-    if #history > 6 then
-        table.remove(history, 1)
+-- SET PART NO COLLIDE + GROUP
+local function disableCollision(part)
+    if part:IsA("BasePart") then
+        pcall(function() part.CanCollide = false end)
+        pcall(function() PhysicsService:SetPartCollisionGroup(part, COLLISION_GROUP) end)
     end
 end
 
-local function accel()
-    if #history < 2 then return 0 end
-    local a = history[#history]
-    local b = history[#history - 1]
-    local dt = a.t - b.t
-    if dt <= 0 then return 0 end
-    return (a.v - b.v) / dt
-end
-
---==================================================
--- FIND ATTACKER (SMART DETECTION)
---==================================================
-local function getClosestPlayer(pos)
-    local closest, dist = nil, math.huge
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-            local d = (plr.Character.HumanoidRootPart.Position - pos).Magnitude
-            if d < dist then
-                dist = d
-                closest = plr
-            end
-        end
-    end
-    return closest
-end
-
---==================================================
--- REFLECT FLING (CORE FEATURE)
---==================================================
-local function reflectFling(hrp, velVec)
-    local attacker = getClosestPlayer(hrp.Position)
-    if not attacker then return end
-
-    local aChar = attacker.Character
-    local aHRP = aChar and aChar:FindFirstChild("HumanoidRootPart")
-    if not aHRP then return end
-
-    -- übertrage impulse zurück
-    local power = velVec.Magnitude * IMPULSE_MULT
-
-    aHRP:ApplyImpulse(velVec.Unit * power)
-    aHRP.AssemblyAngularVelocity = Vector3.new(9e5,9e5,9e5)
-end
-
---==================================================
--- CORE PROTECTION
---==================================================
-local function protect(char)
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-
-    local velVec = hrp.AssemblyLinearVelocity
-    local angVec = hrp.AssemblyAngularVelocity
-
-    local vel = velVec.Magnitude
-    local ang = angVec.Magnitude
-
-    push(vel)
-    local a = accel()
-
-    --==================================================
-    -- ANTI TELEPORT (SKIDFLING COUNTER)
-    --==================================================
-    if lastSafeCF then
-        if (hrp.Position - lastSafeCF.Position).Magnitude > TELEPORT_DIST then
-            hrp.CFrame = lastSafeCF
-            hrp.AssemblyLinearVelocity = Vector3.zero
-            hrp.AssemblyAngularVelocity = Vector3.zero
-            return
-        end
-    end
-
-    --==================================================
-    -- REMOVE BODY MOVERS
-    --==================================================
-    for _, v in ipairs(hrp:GetChildren()) do
-        if v:IsA("BodyVelocity") or v:IsA("BodyAngularVelocity") then
-            v:Destroy()
-        end
-    end
-
-    --==================================================
-    -- LIMITS
-    --==================================================
-    if vel > MAX_VEL then
-        hrp.AssemblyLinearVelocity = velVec.Unit * MAX_VEL
-    end
-
-    if ang > MAX_ANG then
-        hrp.AssemblyAngularVelocity = Vector3.zero
-    end
-
-    --==================================================
-    -- DETECT + REFLECT
-    --==================================================
-    if a > ACCEL_TRIGGER and vel > 70 then
-        local now = os.clock()
-        if now - lastImpulse > COOLDOWN then
-            lastImpulse = now
-
-            -- REFLECT INSTEAD OF TAKING DAMAGE
-            reflectFling(hrp, velVec)
-
-            -- STOP OWN MOVEMENT
-            hrp.AssemblyLinearVelocity = Vector3.zero
-            hrp.AssemblyAngularVelocity = Vector3.zero
-        end
-    end
-
-    --==================================================
-    -- SAVE SAFE POSITION
-    --==================================================
-    if vel < 40 then
-        lastSafeCF = hrp.CFrame
+-- ZERO OUT VELOCITY
+local function resetVelocity(part)
+    if part:IsA("BasePart") then
+        part.Velocity = Vector3.new()
+        part.RotVelocity = Vector3.new()
     end
 end
 
---==================================================
--- NETWORK LOCK
---==================================================
-local function netLock(char)
-    for _, v in ipairs(char:GetDescendants()) do
-        if v:IsA("BasePart") then
-            pcall(function()
-                v:SetNetworkOwner(LocalPlayer)
-            end)
+-- REMOVE BODYFORCE/BODYVELOCITY/VECTORFORCE
+local function stripForces(obj)
+    for _, child in ipairs(obj:GetDescendants()) do
+        if child:IsA("BodyForce")
+        or child:IsA("BodyVelocity")
+        or child:IsA("BodyAngularVelocity")
+        or child:IsA("VectorForce")
+        or child:IsA("BodyGyro")
+        or child:IsA("LinearVelocity")
+        or child:IsA("AngularVelocity")
+        then
+            pcall(function() child:Destroy() end)
         end
     end
 end
 
---==================================================
--- HUMANOID STABILIZE
---==================================================
-local function stabilize(hum)
-    hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
-    hum:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding, false)
-    hum:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
+-- APPLY ANTI-FLING TO CHARACTER
+local function applyAntiFling(character)
+    for _, part in ipairs(character:GetDescendants()) do
+        disableCollision(part)
+        resetVelocity(part)
+    end
+    stripForces(character)
 end
 
---==================================================
--- MAIN
---==================================================
-local function start(char)
-    local hum = char:WaitForChild("Humanoid")
-
-    history = {}
-    lastSafeCF = nil
-    lastImpulse = 0
-
-    stabilize(hum)
-    netLock(char)
-
-    connection = RunService.Heartbeat:Connect(function()
-        if not char.Parent then return end
-
-        netLock(char)
-        protect(char)
+-- DETECT EXPLOITER FORCES (neutralisiert)
+local function monitorForces(character)
+    -- Überwacht neu hinzugefügte BodyForces
+    character.DescendantAdded:Connect(function(desc)
+        if desc:IsA("BodyForce")
+        or desc:IsA("BodyVelocity")
+        or desc:IsA("VectorForce")
+        then
+            task.wait(0.01)
+            stripForces(character)
+        end
     end)
 end
 
---==================================================
--- INIT
---==================================================
-if LocalPlayer.Character then
-    start(LocalPlayer.Character)
+-- FORCE TRANSFER (wenn jemand dich flingt)
+local function forceTransfer(targetChar)
+    if targetChar and targetChar:FindFirstChild("HumanoidRootPart") then
+        local hrp = targetChar.HumanoidRootPart
+        hrp.Velocity = LocalPlayer.Character.HumanoidRootPart.Velocity
+        hrp.RotVelocity = LocalPlayer.Character.HumanoidRootPart.RotVelocity
+    end
 end
 
-LocalPlayer.CharacterAdded:Connect(function(char)
-    task.wait(0.2)
-    start(char)
+-- APPLY TO ALL PLAYERS
+local function handlePlayer(plr)
+    if plr.Character then
+        applyAntiFling(plr.Character)
+        monitorForces(plr.Character)
+    end
+    plr.CharacterAdded:Connect(function(char)
+        task.wait(0.1)
+        applyAntiFling(char)
+        monitorForces(char)
+    end)
+end
+
+-- HEARTBEAT LOOP (permanent enforce)
+local heartbeatConn
+heartbeatConn = RunService.Heartbeat:Connect(function()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr.Character then
+            applyAntiFling(plr.Character)
+        end
+    end
 end)
 
---==================================================
--- CLEANUP
---==================================================
-getgenv().AntiFling_Cleanup = function()
-    if connection then
-        pcall(function()
-            connection:Disconnect()
-        end)
+-- INITIAL SETUP
+for _, plr in ipairs(Players:GetPlayers()) do
+    if plr ~= LocalPlayer then
+        handlePlayer(plr)
+    end
+end
+
+Players.PlayerAdded:Connect(handlePlayer)
+
+if LocalPlayer.Character then
+    applyAntiFling(LocalPlayer.Character)
+    monitorForces(LocalPlayer.Character)
+end
+LocalPlayer.CharacterAdded:Connect(function(char)
+    task.wait(0.1)
+    applyAntiFling(char)
+    monitorForces(char)
+end)
+
+-- CLEANUP FUNCTION
+getgenv().ULTIMATE_ANTI_FLING_CLEANUP = function()
+    if heartbeatConn then
+        pcall(function() heartbeatConn:Disconnect() end)
     end
 end

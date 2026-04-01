@@ -1,6 +1,6 @@
 --==================================================
--- ULTIMATE ANTI-FLING v9 - FINAL
--- No push, no auto-jump, pure stability
+-- ULTIMATE ANTI-FLING v8.5 - PERFECTED
+-- No auto-jump, stable counter, adaptive defense
 --==================================================
 
 if getgenv().AntiFling_Cleanup then
@@ -10,23 +10,29 @@ end
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local PhysicsService = game:GetService("PhysicsService")
-local lp = Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
 
-local GROUP = "ANTIFLING_FINAL"
+local lp = Players.LocalPlayer
+local GROUP = "ANTIFLING_V8"
 
 pcall(function()
     PhysicsService:CreateCollisionGroup(GROUP)
     PhysicsService:CollisionGroupSetCollidable(GROUP, GROUP, false)
 end)
 
+-- Persistent state
 local active = true
 local conn = nil
 local forceConn = nil
 local partMonitor = nil
-local anchored = false
-local anchorPart = nil
+local lastCheck = 0
+local flingCount = 0
+local lastResetPos = nil
+local wasFlinging = false
+local groundedTimer = 0
 
-local function killAllForces(part)
+-- Advanced force killing
+local function killForces(part)
     if not part or not part.Parent then return end
     pcall(function()
         part.Velocity = Vector3.new()
@@ -35,13 +41,19 @@ local function killAllForces(part)
         part.AssemblyAngularVelocity = Vector3.new()
     end)
     
-    for _, v in ipairs(part:GetChildren()) do
-        if v:IsA("BodyForce") or v:IsA("BodyVelocity") or v:IsA("BodyAngularVelocity") or
-           v:IsA("VectorForce") or v:IsA("BodyGyro") or v:IsA("LinearVelocity") or
-           v:IsA("AngularVelocity") or v:IsA("Attachment") then
-            pcall(function() v:Destroy() end)
+    local function scan(obj)
+        for _, v in ipairs(obj:GetChildren()) do
+            if v:IsA("BodyForce") or v:IsA("BodyVelocity") or v:IsA("BodyAngularVelocity") or
+               v:IsA("VectorForce") or v:IsA("BodyGyro") or v:IsA("LinearVelocity") or
+               v:IsA("AngularVelocity") or v:IsA("Attachment") or v:IsA("Constraint") then
+                pcall(function() v:Destroy() end)
+            end
+            if #v:GetChildren() > 0 then
+                scan(v)
+            end
         end
     end
+    scan(part)
 end
 
 local function protectPart(part)
@@ -49,9 +61,10 @@ local function protectPart(part)
     pcall(function()
         part.CanCollide = false
         part.CanTouch = false
+        part.Massless = true
         PhysicsService:SetPartCollisionGroup(part, GROUP)
         part:SetNetworkOwner(lp)
-        killAllForces(part)
+        killForces(part)
     end)
 end
 
@@ -60,21 +73,6 @@ local function forceOwnershipAll(char)
         if part:IsA("BasePart") then
             pcall(function() part:SetNetworkOwner(lp) end)
         end
-    end
-end
-
-local function lockRootPart(hrp)
-    if not hrp then return end
-    if not anchored then
-        anchored = true
-        pcall(function()
-            hrp.Anchored = true
-        end)
-        task.wait(0.05)
-        pcall(function()
-            hrp.Anchored = false
-        end)
-        anchored = false
     end
 end
 
@@ -91,15 +89,26 @@ local function protectChar(char)
     if hum then
         pcall(function()
             hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
-            hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
             hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+            hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
             hum.PlatformStand = false
             hum.AutoRotate = true
-            hum.Sit = false
         end)
     end
     
     forceOwnershipAll(char)
+end
+
+local function isGrounded(char)
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+    
+    local rayOrigin = hrp.Position
+    local rayDirection = Vector3.new(0, -5, 0)
+    local ray = Ray.new(rayOrigin, rayDirection)
+    local hit = workspace:FindPartOnRay(ray, char)
+    
+    return hit ~= nil
 end
 
 local function startForceScanner(char)
@@ -114,47 +123,75 @@ local function startForceScanner(char)
         forceOwnershipAll(char)
         
         if hrp then
-            local vel = hrp.AssemblyLinearVelocity
-            local velMag = vel.Magnitude
+            local velMag = hrp.AssemblyLinearVelocity.Magnitude
+            local grounded = isGrounded(char)
             
-            -- Threshold
-            if velMag > 85 then
-                -- Kill ALL velocity
+            if grounded then
+                groundedTimer = math.min(groundedTimer + 0.016, 1)
+            else
+                groundedTimer = math.max(groundedTimer - 0.016, 0)
+            end
+            
+            local threshold = 95
+            if flingCount > 3 then
+                threshold = 75
+            end
+            
+            -- Fling detection
+            if velMag > threshold then
+                if not wasFlinging then
+                    wasFlinging = true
+                    flingCount = flingCount + 1
+                end
+                
+                -- Aggressive counter
                 hrp.AssemblyLinearVelocity = Vector3.new()
                 hrp.AssemblyAngularVelocity = Vector3.new()
-                killAllForces(hrp)
+                killForces(hrp)
                 
-                -- Kill forces on all parts
                 for _, part in ipairs(char:GetDescendants()) do
                     if part:IsA("BasePart") then
-                        killAllForces(part)
+                        killForces(part)
                     end
                 end
                 
-                -- Micro-anchor (prevents push without jumping)
-                if velMag > 120 then
-                    pcall(function()
-                        hrp.Anchored = true
-                        task.wait(0.03)
-                        hrp.Anchored = false
-                    end)
+                -- Position lock (prevents being moved)
+                local currentPos = hrp.Position
+                if lastResetPos then
+                    local delta = (currentPos - lastResetPos).Magnitude
+                    if delta > 15 then
+                        hrp.CFrame = CFrame.new(lastResetPos)
+                    end
+                else
+                    lastResetPos = currentPos
                 end
                 
-                -- Prevent jumping (force grounded)
-                if hum and hum:GetState() == Enum.HumanoidStateType.Jumping then
-                    hum:ChangeState(Enum.HumanoidStateType.Landed)
+                -- Anti-stun: force getting up (NO JUMP)
+                if hum then
+                    local state = hum:GetState()
+                    if state == Enum.HumanoidStateType.Ragdoll or state == Enum.HumanoidStateType.FallingDown then
+                        hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+                    end
+                    -- DO NOT trigger jumping - prevents auto-jump
+                    if hum.PlatformStand then
+                        hum.PlatformStand = false
+                    end
                 end
                 
-                -- Anti-ragdoll
-                if hum and hum:GetState() == Enum.HumanoidStateType.Ragdoll then
-                    hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+                local now = tick()
+                if now - lastCheck > 0.5 then
+                    lastCheck = now
+                end
+            else
+                wasFlinging = false
+                if flingCount > 0 then
+                    flingCount = flingCount - 0.3
                 end
             end
             
-            -- Teleport detection (position clamp)
-            if hrp.Position.Y < 0 then
-                local currentPos = hrp.Position
-                hrp.CFrame = CFrame.new(currentPos.X, 5, currentPos.Z)
+            -- Position anchor (teleport prevention)
+            if lastResetPos and (hrp.Position - lastResetPos).Magnitude > 25 then
+                hrp.CFrame = CFrame.new(lastResetPos)
                 hrp.AssemblyLinearVelocity = Vector3.new()
             end
         end
@@ -170,9 +207,11 @@ local function monitorPartAddition(char)
         end
         if desc:IsA("BodyForce") or desc:IsA("BodyVelocity") or desc:IsA("VectorForce") or
            desc:IsA("BodyAngularVelocity") or desc:IsA("LinearVelocity") then
+            task.wait(0.01)
             pcall(function() desc:Destroy() end)
+            flingCount = flingCount + 1
         end
-        if desc:IsA("Attachment") then
+        if desc:IsA("Attachment") or desc:IsA("Constraint") then
             pcall(function() desc:Destroy() end)
         end
     end)
@@ -183,9 +222,12 @@ local function startPeriodicReset(char)
         while active and char and char.Parent do
             wait(1.5)
             local hrp = char:FindFirstChild("HumanoidRootPart")
-            if hrp and hrp.AssemblyLinearVelocity.Magnitude > 40 then
-                hrp.AssemblyLinearVelocity = Vector3.new()
-                hrp.AssemblyAngularVelocity = Vector3.new()
+            if hrp then
+                if hrp.AssemblyLinearVelocity.Magnitude > 40 then
+                    hrp.AssemblyLinearVelocity = Vector3.new()
+                    hrp.AssemblyAngularVelocity = Vector3.new()
+                end
+                lastResetPos = hrp.Position
             end
         end
     end)
@@ -213,9 +255,11 @@ local function start()
             protectChar(currentChar)
             
             local hrp = currentChar:FindFirstChild("HumanoidRootPart")
-            if hrp and hrp.AssemblyLinearVelocity.Magnitude > 75 then
-                hrp.AssemblyLinearVelocity = Vector3.new()
-                hrp.AssemblyAngularVelocity = Vector3.new()
+            if hrp then
+                if hrp.AssemblyLinearVelocity.Magnitude > 85 then
+                    hrp.AssemblyLinearVelocity = Vector3.new()
+                    hrp.AssemblyAngularVelocity = Vector3.new()
+                end
             end
         end
     end)
@@ -223,6 +267,9 @@ end
 
 lp.CharacterAdded:Connect(function(char)
     wait(0.3)
+    flingCount = 0
+    lastResetPos = nil
+    wasFlinging = false
     start()
 end)
 
@@ -241,7 +288,7 @@ getgenv().AntiFling_Cleanup = function()
 end
 
 game:GetService("StarterGui"):SetCore("SendNotification", {
-    Title = "Anti-Fling v9",
-    Text = "Stable | No Push | No Auto-Jump",
+    Title = "Anti-Fling v8.5",
+    Text = "Stable Defense | No Auto-Jump",
     Duration = 3
 })

@@ -10,162 +10,127 @@ end
 --==================================================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local PhysicsService = game:GetService("PhysicsService")
 
 local LocalPlayer = Players.LocalPlayer
 
 --==================================================
--- SETTINGS
+-- SETTINGS (GEGEN SKIDFLING)
 --==================================================
-local MAX_LINEAR = 90
-local MAX_ANGULAR = 45
-local HARD_LIMIT = 180
-
-local ACCEL_TRIGGER = 500
-local IMPULSE_POWER = 1.25
-local COOLDOWN = 0.12
-
-local GROUP = "AF_GHOST"
+local MAX_VEL = 80
+local MAX_ANG = 40
+local TELEPORT_DISTANCE = 25
+local IMPULSE_POWER = 1.3
 
 --==================================================
 -- STATE
 --==================================================
 local connection
-local velocityHistory = {}
-local lastImpulse = 0
-
---==================================================
--- COLLISION GROUP (GHOST MODE)
---==================================================
-pcall(function()
-    PhysicsService:CreateCollisionGroup(GROUP)
-end)
-
-pcall(function()
-    PhysicsService:CollisionGroupSetCollidable(GROUP, GROUP, false)
-end)
-
---==================================================
--- ANTI TARGET SYSTEM (CORE)
--- verhindert Targeting durch Exploits
---==================================================
-local function makeUntargetable(char)
-    for _, v in ipairs(char:GetDescendants()) do
-        if v:IsA("BasePart") then
-            pcall(function()
-                v.CanCollide = false
-                v.Massless = true
-                v.CanQuery = false
-                v.CanTouch = false
-                v:SetNetworkOwner(LocalPlayer)
-                PhysicsService:SetPartCollisionGroup(v, GROUP)
-            end)
-        elseif v:IsA("Humanoid") then
-            pcall(function()
-                v.Name = "Humanoid_" .. math.random(1000,9999)
-            end)
-        end
-    end
-end
-
---==================================================
--- HISTORY
---==================================================
-local function push(v)
-    table.insert(velocityHistory, {
-        t = os.clock(),
-        v = v
-    })
-    if #velocityHistory > 6 then
-        table.remove(velocityHistory, 1)
-    end
-end
-
-local function accel()
-    if #velocityHistory < 2 then return 0 end
-    local a = velocityHistory[#velocityHistory]
-    local b = velocityHistory[#velocityHistory - 1]
-    local dt = a.t - b.t
-    if dt <= 0 then return 0 end
-    return (a.v - b.v) / dt
-end
+local lastSafeCFrame
+local lastVel = Vector3.zero
+local lastTime = 0
 
 --==================================================
 -- CORE ANTI FLING
 --==================================================
-local function protect(hrp)
-    local velVec = hrp.AssemblyLinearVelocity
-    local angVec = hrp.AssemblyAngularVelocity
+local function protect(char)
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hrp or not hum then return end
 
-    local vel = velVec.Magnitude
-    local ang = angVec.Magnitude
+    local currentVel = hrp.AssemblyLinearVelocity
+    local currentAng = hrp.AssemblyAngularVelocity
 
-    push(vel)
-    local a = accel()
+    local speed = currentVel.Magnitude
+    local ang = currentAng.Magnitude
 
-    -- HARD STOP
-    if vel > HARD_LIMIT then
-        hrp.AssemblyLinearVelocity = Vector3.zero
-        hrp.AssemblyAngularVelocity = Vector3.zero
-        return
-    end
-
-    -- LIMITS
-    if vel > MAX_LINEAR then
-        hrp.AssemblyLinearVelocity = velVec.Unit * MAX_LINEAR
-    end
-
-    if ang > MAX_ANGULAR then
-        hrp.AssemblyAngularVelocity = Vector3.zero
-    end
-
-    -- SMART IMPULSE
-    if a > ACCEL_TRIGGER and vel > 70 then
-        local now = os.clock()
-        if now - lastImpulse > COOLDOWN then
-            lastImpulse = now
-
-            local counter = -velVec.Unit * (vel * IMPULSE_POWER)
-            hrp:ApplyImpulse(counter)
-
+    --==================================================
+    -- ANTI TELEPORT (GENAU GEGEN SKIDFLING)
+    --==================================================
+    if lastSafeCFrame then
+        local dist = (hrp.Position - lastSafeCFrame.Position).Magnitude
+        if dist > TELEPORT_DISTANCE then
+            hrp.CFrame = lastSafeCFrame
+            hrp.AssemblyLinearVelocity = Vector3.zero
             hrp.AssemblyAngularVelocity = Vector3.zero
+            return
         end
+    end
+
+    --==================================================
+    -- VELOCITY LIMIT
+    --==================================================
+    if speed > MAX_VEL then
+        hrp.AssemblyLinearVelocity = currentVel.Unit * MAX_VEL
+    end
+
+    if ang > MAX_ANG then
+        hrp.AssemblyAngularVelocity = Vector3.zero
+    end
+
+    --==================================================
+    -- IMPULSE COUNTER (ANTI BODYVELOCITY / ROT)
+    --==================================================
+    if speed > 60 then
+        local counter = -currentVel.Unit * (speed * IMPULSE_POWER)
+        hrp:ApplyImpulse(counter)
+        hrp.AssemblyAngularVelocity = Vector3.zero
+    end
+
+    --==================================================
+    -- ANTI BODYVELOCITY DELETE
+    --==================================================
+    for _, v in ipairs(hrp:GetChildren()) do
+        if v:IsA("BodyVelocity") or v:IsA("BodyAngularVelocity") then
+            v:Destroy()
+        end
+    end
+
+    --==================================================
+    -- SAVE SAFE POSITION
+    --==================================================
+    if speed < 40 then
+        lastSafeCFrame = hrp.CFrame
     end
 end
 
 --==================================================
--- HUMANOID STABILIZER
+-- HUMANOID PROTECTION
 --==================================================
 local function stabilize(hum)
+    hum:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
     hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
     hum:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding, false)
-    hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
-    hum:SetStateEnabled(Enum.HumanoidStateType.Freefall, true)
+end
+
+--==================================================
+-- NETWORK LOCK (ANTI EXPLOIT CONTROL)
+--==================================================
+local function networkLock(char)
+    for _, v in ipairs(char:GetDescendants()) do
+        if v:IsA("BasePart") then
+            pcall(function()
+                v:SetNetworkOwner(LocalPlayer)
+            end)
+        end
+    end
 end
 
 --==================================================
 -- MAIN
 --==================================================
 local function start(char)
-    local hrp = char:WaitForChild("HumanoidRootPart")
-    local hum = char:FindFirstChildOfClass("Humanoid")
+    local hum = char:WaitForChild("Humanoid")
 
-    velocityHistory = {}
-    lastImpulse = 0
+    lastSafeCFrame = nil
 
-    if hum then
-        stabilize(hum)
-    end
-
-    makeUntargetable(char)
+    stabilize(hum)
+    networkLock(char)
 
     connection = RunService.Heartbeat:Connect(function()
         if not char.Parent then return end
 
-        -- ANTI TARGET PER FRAME (ANTI BYPASS)
-        makeUntargetable(char)
-
-        protect(hrp)
+        networkLock(char) -- dauerhaft erzwingen
+        protect(char)
     end)
 end
 

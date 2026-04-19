@@ -7463,12 +7463,16 @@ end
 --  EXECUTOR-FILESYSTEM HELPERS
 -- ══════════════════════════════════════════════
 local FS = {
-    read    = typeof(readfile)   == "function" and readfile   or nil,
-    write   = typeof(writefile)  == "function" and writefile  or nil,
-    isfile  = typeof(isfile)     == "function" and isfile     or nil,
-    isfolder= typeof(isfolder)   == "function" and isfolder   or nil,
-    mkdir   = typeof(makefolder) == "function" and makefolder or nil,
-    del     = typeof(delfile)    == "function" and delfile     or nil,
+    read    = typeof(readfile)    == "function" and readfile    or nil,
+    write   = typeof(writefile)   == "function" and writefile   or nil,
+    isfile  = typeof(isfile)      == "function" and isfile      or nil,
+    isfolder= typeof(isfolder)    == "function" and isfolder    or nil,
+    mkdir   = (typeof(makefolder) == "function" and makefolder)
+           or (typeof(createfolder) == "function" and createfolder)
+           or nil,
+    del     = (typeof(delfile)    == "function" and delfile)
+           or (typeof(removefile) == "function" and removefile)
+           or nil,
 }
 local diskCacheAvailable = FS.read and FS.write and FS.isfile and FS.mkdir
 
@@ -7864,11 +7868,26 @@ local OutfitDetailsCache = {
     ttl   = 300,
 }
 
--- httpFunc wird einmalig aufgelöst (statt bei jedem Request)
-local httpFunc = (syn and syn.request)
-              or (http and http.request)
-              or (typeof(request)       == "function" and request)
-              or (typeof(http_request)  == "function" and http_request)
+-- httpFunc: broad executor compatibility (Synapse, Velocity, ByteBreaker, Fluxus, KRNL, Hydrogen, Codex, etc.)
+local function _resolveHttpFunc()
+    local raw = (syn         and type(syn.request)      == "function" and syn.request)
+             or (http        and type(http.request)     == "function" and http.request)
+             or (fluxus      and type(fluxus.request)   == "function" and fluxus.request)
+             or (typeof(request)      == "function" and request)
+             or (typeof(http_request) == "function" and http_request)
+             or nil
+    if not raw then return nil end
+    -- Wrap to normalise response fields across all executors
+    return function(opts)
+        local ok, resp = pcall(raw, opts)
+        if not ok or type(resp) ~= "table" then return nil end
+        local code = tonumber(resp.StatusCode or resp.statusCode or resp.status_code) or 0
+        local body = resp.Body or resp.body or ""
+        local hdrs = resp.Headers or resp.headers or {}
+        return { StatusCode = code, Body = body, Headers = hdrs }
+    end
+end
+local httpFunc = _resolveHttpFunc()
 
 local function getJitter(max) return math.random() * (max or 0) end
 
@@ -8616,20 +8635,20 @@ local SavedPanel, SavedTitleBar, SavedTitleName, SavedTitleSub, SavedCloseBtn, S
     SavedTitleBarLine.BorderSizePixel = 0; SavedTitleBarLine.ZIndex = 27; SavedTitleBarLine.Parent = SavedTitleBar
 
     local SavedIcon = Instance.new("TextLabel")
-    SavedIcon.Text = "★"; SavedIcon.Size = UDim2.fromOffset(24,24); SavedIcon.Position = UDim2.fromOffset(14,10)
+    SavedIcon.Text = "★"; SavedIcon.Size = UDim2.fromOffset(24,24); SavedIcon.Position = UDim2.fromOffset(14,13)
     SavedIcon.BackgroundTransparency = 1; SavedIcon.TextSize = 16; SavedIcon.TextColor3 = C.ACCENT
     SavedIcon.ZIndex = 27; SavedIcon.Parent = SavedTitleBar; applyTextStyle(SavedIcon)
 
     local SavedTitleName = Instance.new("TextLabel")
     SavedTitleName.Text = "Saved Outfits"; SavedTitleName.Size = UDim2.new(1,-80,0,22)
-    SavedTitleName.Position = UDim2.fromOffset(42,6); SavedTitleName.BackgroundTransparency = 1
+    SavedTitleName.Position = UDim2.fromOffset(42,5); SavedTitleName.BackgroundTransparency = 1
     SavedTitleName.TextSize = 13; SavedTitleName.TextColor3 = C.TEXT1
     SavedTitleName.TextXAlignment = Enum.TextXAlignment.Left; SavedTitleName.ZIndex = 27
     SavedTitleName.Parent = SavedTitleBar; applyTextStyle(SavedTitleName)
 
     local SavedTitleSub = Instance.new("TextLabel")
     SavedTitleSub.Text = "Gespeicherte Outfits"; SavedTitleSub.Size = UDim2.new(1,-80,0,16)
-    SavedTitleSub.Position = UDim2.fromOffset(42,28); SavedTitleSub.BackgroundTransparency = 1
+    SavedTitleSub.Position = UDim2.fromOffset(42,25); SavedTitleSub.BackgroundTransparency = 1
     SavedTitleSub.TextSize = 10; SavedTitleSub.TextColor3 = C.TEXT2
     SavedTitleSub.TextXAlignment = Enum.TextXAlignment.Left; SavedTitleSub.ZIndex = 27
     SavedTitleSub.Parent = SavedTitleBar; applyTextStyle(SavedTitleSub)

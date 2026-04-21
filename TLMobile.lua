@@ -3895,105 +3895,132 @@ do -- Inner scope for Fly V4
 
     local Wrapper = Instance.new("Frame")
     Wrapper.Name                   = "Wrapper"
-    Wrapper.Size                   = UDim2.new(0, 210, 0, 180)
-    Wrapper.Position               = UDim2.new(0.5, -105, 0.5, -90)
+    Wrapper.Size                   = UDim2.new(0, 640, 0, 34)
+    Wrapper.AnchorPoint            = Vector2.new(0.5, 0)
+    Wrapper.Position               = UDim2.new(0.5, 0, 0, 17)
     Wrapper.BackgroundTransparency = 1
     Wrapper.BorderSizePixel        = 0
     Wrapper.Active                 = true
-    Wrapper.Draggable              = true
+    Wrapper.Draggable              = false
     Wrapper.Parent                 = ScreenGui
 
     local MainFrame = Instance.new("Frame")
     MainFrame.Name                   = "MainFrame"
-    MainFrame.Size                   = UDim2.new(1, 0, 0, 180)
+    MainFrame.Size                   = UDim2.new(1, 0, 1, 0)
     MainFrame.BackgroundColor3       = C.panelBg
     MainFrame.BackgroundTransparency = 0
     MainFrame.BorderSizePixel        = 0
     MainFrame.Parent                 = Wrapper
-    stylePanelSurface(MainFrame, 10, 0)
+    stylePanelSurface(MainFrame, 12, 0)
 
     local mStroke = _makeDummyStroke()
     mStroke.Thickness    = 1.5; mStroke.Color = C.accent; mStroke.Transparency = 0.2; mStroke.Parent = MainFrame
 
-    local Title = Instance.new("TextLabel")
-    Title.Size = UDim2.new(1, 0, 0, 28); Title.BackgroundTransparency = 1; Title.Text = "FLY CONTROLS"; Title.TextColor3 = C.accent
-    Title.Font = Enum.Font.GothamBold; Title.TextSize = 13; Title.Parent = MainFrame
-
     local ButtonContainer = Instance.new("Frame")
-    ButtonContainer.Size = UDim2.new(1, -20, 1, -36); ButtonContainer.Position = UDim2.new(0, 10, 0, 33); ButtonContainer.BackgroundTransparency = 1; ButtonContainer.Parent = MainFrame
-    local UIListLayout = Instance.new("UIListLayout"); UIListLayout.Padding = UDim.new(0, 7); UIListLayout.Parent = ButtonContainer
+    ButtonContainer.Size = UDim2.new(1, 0, 1, 0); ButtonContainer.BackgroundTransparency = 1; ButtonContainer.Parent = MainFrame
+    
+    local UIListLayout = Instance.new("UIListLayout"); 
+    UIListLayout.FillDirection = Enum.FillDirection.Horizontal
+    UIListLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+    UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    UIListLayout.Padding = UDim.new(0, 12); UIListLayout.Parent = ButtonContainer
+    
+    local UIPad = Instance.new("UIPadding")
+    UIPad.PaddingLeft = UDim.new(0, 14); UIPad.PaddingRight = UDim.new(0, 14); UIPad.Parent = ButtonContainer
+
+    local InfoCont = Instance.new("Frame")
+    InfoCont.Size = UDim2.new(0, 85, 1, 0); InfoCont.BackgroundTransparency = 1; InfoCont.LayoutOrder = 1; InfoCont.Parent = ButtonContainer
+    
+    local Title = Instance.new("TextLabel")
+    Title.Size = UDim2.new(1, 0, 0, 14); Title.Position = UDim2.new(0, 0, 0, 5); Title.BackgroundTransparency = 1; Title.Text = "FLY MODE"; Title.TextColor3 = C.accent
+    Title.Font = Enum.Font.GothamBold; Title.TextSize = 11; Title.TextXAlignment = Enum.TextXAlignment.Left; Title.Parent = InfoCont
+    
+    local StatusLabel = Instance.new("TextLabel")
+    StatusLabel.Size = UDim2.new(1, 0, 0, 12); StatusLabel.Position = UDim2.new(0, 0, 0, 17); StatusLabel.BackgroundTransparency = 1; StatusLabel.Text = "OFF | GLIDE"; StatusLabel.TextColor3 = C.sub
+    StatusLabel.Font = Enum.Font.GothamSemibold; StatusLabel.TextSize = 9; StatusLabel.TextXAlignment = Enum.TextXAlignment.Left; StatusLabel.Parent = InfoCont
 
     local function createButton(text, callback)
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, 0, 0, 28); btn.BackgroundColor3 = C.bg3; btn.BackgroundTransparency = 0.2
+        btn.Size = UDim2.new(0, 100, 0, 30); btn.BackgroundColor3 = C.bg3; btn.BackgroundTransparency = 0.2
         btn.TextColor3 = C.text; btn.Font = Enum.Font.GothamBold; btn.TextSize = 11; btn.Text = text; btn.BorderSizePixel = 0; btn.AutoButtonColor = false
         corner(btn, 8)
         local s = stroke(btn, 1, C.accent, 0.45)
-        bindFly(btn.MouseEnter, function() TweenService:Create(btn, TweenInfo.new(0.1), {BackgroundColor3 = C.accent, BackgroundTransparency = 0.3, TextColor3 = Color3.new(1,1,1)}):Play() end)
-        bindFly(btn.MouseLeave, function() TweenService:Create(btn, TweenInfo.new(0.1), {BackgroundColor3 = C.bg3, BackgroundTransparency = 0.2, TextColor3 = C.text}):Play() end)
+        local popS = Instance.new("UIScale"); popS.Parent = btn
+        bindFly(btn.MouseEnter, function() TweenService:Create(btn, TweenInfo.new(0.08), {BackgroundColor3 = C.accent, BackgroundTransparency = 0.1, TextColor3 = Color3.new(1,1,1)}):Play() end)
+        bindFly(btn.MouseLeave, function() TweenService:Create(btn, TweenInfo.new(0.12), {BackgroundColor3 = C.bg3, BackgroundTransparency = 0.2, TextColor3 = C.text}):Play() end)
+        bindFly(btn.MouseButton1Down, function() TweenService:Create(popS, TweenInfo.new(0.08), {Scale = 0.92}):Play() end)
+        bindFly(btn.MouseButton1Up, function() TweenService:Create(popS, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1}):Play() end)
         bindFly(btn.MouseButton1Click, callback); return btn
     end
 
-    local StatusLabel = Instance.new("TextLabel")
-    StatusLabel.Size = UDim2.new(1, 0, 0, 16); StatusLabel.BackgroundTransparency = 1; StatusLabel.Text = "Status: OFF  |  GLIDE"; StatusLabel.TextColor3 = C.sub
-    StatusLabel.Font = Enum.Font.GothamBold; StatusLabel.TextSize = 10; StatusLabel.TextXAlignment = Enum.TextXAlignment.Center; StatusLabel.Parent = ButtonContainer
+    local ToggleBtn = createButton("✈  Toggle [F]", function()
+        if _flyPanelSetFn then pcall(_flyPanelSetFn, not flying) else setFly(not flying) end
+    end)
+    ToggleBtn.Size = UDim2.new(0, 95, 0, 26); ToggleBtn.LayoutOrder = 2; ToggleBtn.Parent = ButtonContainer
 
-    local ToggleBtn
-    ToggleBtn = createButton("✈  Toggle Fly  [F]", function() setFly(not flying) end)
-    ToggleBtn.Parent = ButtonContainer
+    -- Speed Group (Unified)
+    local SpeedGroup = Instance.new("Frame")
+    SpeedGroup.Size = UDim2.new(0, 190, 0, 26); SpeedGroup.BackgroundTransparency = 1; SpeedGroup.LayoutOrder = 3; SpeedGroup.Parent = ButtonContainer
+    local sgL = Instance.new("UIListLayout"); sgL.FillDirection = Enum.FillDirection.Horizontal; sgL.VerticalAlignment = Enum.VerticalAlignment.Center; sgL.Padding = UDim.new(0, 4); sgL.Parent = SpeedGroup
 
-    local SpeedBtn = createButton("⚡  Speed: GLIDE  [Q]", function()
+    local SpeedBtn = createButton("⚡  Speed: GLIDE", function()
         if flying then speedIndex = (speedIndex % #speedLevels) + 1; hasBoosted = true; updateHUD() end
     end)
-    SpeedBtn.Parent = ButtonContainer
+    SpeedBtn.Size = UDim2.new(0, 120, 1, 0); SpeedBtn.LayoutOrder = 1; SpeedBtn.Parent = SpeedGroup
 
-    local SpeedRow = Instance.new("Frame")
-    SpeedRow.Size = UDim2.new(1, 0, 0, 28); SpeedRow.BackgroundTransparency = 1; SpeedRow.Parent = ButtonContainer
     local MinusBtn = createButton("−", function() if speedIndex > 1 then speedIndex -= 1; hasBoosted = true; updateHUD() end end)
-    MinusBtn.Size = UDim2.new(0.42, 0, 1, 0); MinusBtn.Parent = SpeedRow
+    MinusBtn.Size = UDim2.new(0, 26, 1, 0); MinusBtn.LayoutOrder = 2; MinusBtn.Parent = SpeedGroup
     local PlusBtn = createButton("+", function() if speedIndex < #speedLevels then speedIndex += 1; hasBoosted = true; updateHUD() end end)
-    PlusBtn.Size = UDim2.new(0.42, 0, 1, 0); PlusBtn.Position = UDim2.new(0.58, 0, 0, 0); PlusBtn.Parent = SpeedRow
+    PlusBtn.Size = UDim2.new(0, 26, 1, 0); PlusBtn.LayoutOrder = 3; PlusBtn.Parent = SpeedGroup
 
-    -- -- Dropdown Pill --
-    local PILL_COLLAPSED_H, PILL_EXPANDED_H, PILL_GAP = 22, 168, 6
+    local AnimBtn = createButton("Anim: " .. animSets[currentAnimSet].name, function() end)
+    AnimBtn.Size = UDim2.new(0, 140, 0, 26); AnimBtn.LayoutOrder = 4; AnimBtn.Parent = ButtonContainer
+    
+    local DropArrow = Instance.new("TextLabel")
+    DropArrow.Name = "DropArrow"
+    DropArrow.Size = UDim2.new(0, 16, 1, 0); DropArrow.Position = UDim2.new(1, -18, 0, 0)
+    DropArrow.BackgroundTransparency = 1; DropArrow.Text = "▼"; DropArrow.TextColor3 = C.accent
+    DropArrow.Font = Enum.Font.GothamBold; DropArrow.TextSize = 10; DropArrow.TextXAlignment = Enum.TextXAlignment.Center; DropArrow.Parent = AnimBtn
+
+    -- Dropdown Pill --
+    local PILL_EXPANDED_H, PILL_GAP = 168, 6
     local dropOpen = false
     local PillOuter = Instance.new("Frame")
-    PillOuter.Size = UDim2.new(1, 0, 0, PILL_COLLAPSED_H); PillOuter.Position = UDim2.new(0, 0, 0, 180 + PILL_GAP); PillOuter.BackgroundColor3 = C.panelBg
+    PillOuter.Size = UDim2.new(0, 150, 0, 0); PillOuter.Position = UDim2.new(0, 474, 0, 34 + PILL_GAP); PillOuter.BackgroundColor3 = C.panelBg
     PillOuter.BackgroundTransparency = 0.1; PillOuter.BorderSizePixel = 0; PillOuter.ClipsDescendants = true; PillOuter.Parent = Wrapper
     corner(PillOuter, 10)
     local pillStroke = _makeDummyStroke(); pillStroke.Color = C.accent; pillStroke.Thickness = 1; pillStroke.Transparency = 0.55; pillStroke.Parent = PillOuter
-    local PillHeader = Instance.new("TextButton")
-    PillHeader.Size = UDim2.new(1, 0, 0, PILL_COLLAPSED_H); PillHeader.BackgroundTransparency = 1; PillHeader.Text = ""; PillHeader.AutoButtonColor = false; PillHeader.Parent = PillOuter
-    local Arrow = Instance.new("TextLabel")
-    Arrow.Size = UDim2.new(0, 16, 0, 16); Arrow.Position = UDim2.new(1, -20, 0.5, -8); Arrow.BackgroundTransparency = 1; Arrow.Text = "▾"; Arrow.TextColor3 = Color3.fromRGB(160, 210, 255); Arrow.Font = Enum.Font.GothamBold; Arrow.TextSize = 12; Arrow.Parent = PillHeader
-    local PillLabel = Instance.new("TextLabel")
-    PillLabel.Size = UDim2.new(1, -30, 1, 0); PillLabel.Position = UDim2.new(0, 10, 0, 0); PillLabel.BackgroundTransparency = 1; PillLabel.Text = "Anim: " .. animSets[currentAnimSet].name; PillLabel.TextColor3 = Color3.fromRGB(160, 210, 255); PillLabel.Font = Enum.Font.GothamSemibold; PillLabel.TextSize = 10; PillLabel.TextXAlignment = Enum.TextXAlignment.Left; PillLabel.Parent = PillHeader
 
     local ScrollFrame = Instance.new("ScrollingFrame")
-    ScrollFrame.Size = UDim2.new(1, -8, 0, PILL_EXPANDED_H - PILL_COLLAPSED_H - 4); ScrollFrame.Position = UDim2.new(0, 4, 0, PILL_COLLAPSED_H + 2); ScrollFrame.BackgroundTransparency = 1; ScrollFrame.BorderSizePixel = 0; ScrollFrame.ScrollBarThickness = 3; ScrollFrame.ScrollBarImageColor3 = C.accent; ScrollFrame.ScrollBarImageTransparency = 0.4; ScrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y; ScrollFrame.Parent = PillOuter
+    ScrollFrame.Size = UDim2.new(1, -8, 1, -8); ScrollFrame.Position = UDim2.new(0, 4, 0, 4); ScrollFrame.BackgroundTransparency = 1; ScrollFrame.BorderSizePixel = 0; ScrollFrame.ScrollBarThickness = 3; ScrollFrame.ScrollBarImageColor3 = C.accent; ScrollFrame.ScrollBarImageTransparency = 0.4; ScrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y; ScrollFrame.Parent = PillOuter
     local scrollLayout = Instance.new("UIListLayout"); scrollLayout.Padding = UDim.new(0, 5); scrollLayout.Parent = ScrollFrame
     local scrollPadding = Instance.new("UIPadding"); scrollPadding.PaddingTop = UDim.new(0, 4); scrollPadding.PaddingBottom = UDim.new(0, 4); scrollPadding.PaddingLeft = UDim.new(0, 3); scrollPadding.Parent = ScrollFrame
 
     local function refreshAnimRows()
         for i, btn in ipairs(animSetButtons) do
             local isActive = (i == currentAnimSet)
-            TweenService:Create(btn, TweenInfo.new(0.12), {BackgroundColor3 = isActive and (C.bg3 or Color3.fromRGB(22, 22, 22)) or C.panelBg, BackgroundTransparency = isActive and 0.15 or 0.5}):Play()
+            TweenService:Create(btn, TweenInfo.new(0.08), {BackgroundColor3 = isActive and (C.bg3 or Color3.fromRGB(22, 22, 22)) or C.panelBg, BackgroundTransparency = isActive and 0.15 or 0.5}):Play()
             local stroke = btn:FindFirstChildOfClass("UIStroke"); if stroke then stroke.Color = isActive and C.accent or Color3.fromRGB(80, 100, 120); stroke.Transparency = isActive and 0.2 or 0.7 end
             local label = btn:FindFirstChild("NameLabel"); if label then label.TextColor3 = isActive and C.accent or Color3.fromRGB(180, 200, 220) end
             local dot = btn:FindFirstChild("ActiveDot"); if dot then dot.Visible = isActive end
         end
-        PillLabel.Text = "Anim: " .. animSets[currentAnimSet].name
+        local arrow = AnimBtn:FindFirstChild("DropArrow")
+        if arrow then 
+            TweenService:Create(arrow, TweenInfo.new(0.2), {Rotation = dropOpen and 180 or 0}):Play()
+        end
+        AnimBtn.Text = "Anim: " .. animSets[currentAnimSet].name
     end
 
     local function switchAnimSet(index)
         currentAnimSet = index; refreshAnimRows()
         if flying then
-            if flyTrack then flyTrack:Stop(); flyTrack = nil end
-            if flyFwdTrack then flyFwdTrack:Stop(); flyFwdTrack = nil end
-            if flyGlideTrack then flyGlideTrack:Stop(); flyGlideTrack = nil end
+            if flyTrack then flyTrack:Stop(0.35); flyTrack = nil end
+            if flyFwdTrack then flyFwdTrack:Stop(0.35); flyFwdTrack = nil end
+            if flyGlideTrack then flyGlideTrack:Stop(0.35); flyGlideTrack = nil end
             local s = animSets[currentAnimSet]
             flyTrack = loadTrackFromId(s.idle); flyFwdTrack = loadTrackFromId(s.fwd); flyGlideTrack = loadTrackFromId(s.glide)
-            if flyTrack then flyTrack:Play() end
+            if flyTrack then flyTrack:Play(0.35) end
         end
     end
 
@@ -4010,12 +4037,45 @@ do -- Inner scope for Fly V4
         animSetButtons[i] = row
     end
 
-    bindFly(PillHeader.MouseButton1Click, function()
+    if _panelColorHooks then
+        _panelColorHooks[#_panelColorHooks+1] = function()
+            pcall(function() MainFrame.BackgroundColor3 = C.panelBg end)
+            pcall(function() Title.TextColor3 = C.accent end)
+            pcall(function() StatusLabel.TextColor3 = C.sub end)
+            pcall(function() PillOuter.BackgroundColor3 = C.panelBg end)
+            pcall(function() ScrollFrame.ScrollBarImageColor3 = C.accent end)
+            
+            local btns = {ToggleBtn, SpeedBtn, MinusBtn, PlusBtn, AnimBtn}
+            for _, b in ipairs(btns) do
+                pcall(function() b.BackgroundColor3 = C.bg3 end)
+                pcall(function() b.TextColor3 = C.text end)
+                local s = b:FindFirstChildOfClass("UIStroke")
+                if s then pcall(function() s.Color = C.accent end) end
+            end
+            
+            pcall(refreshAnimRows)
+            if hudGui and hudGui.Parent then
+                local frame = hudGui:FindFirstChild("Frame")
+                if frame then pcall(function() frame.BackgroundColor3 = C.panelBg end) end
+            end
+        end
+    end
+
+    bindFly(AnimBtn.MouseButton1Click, function()
         dropOpen = not dropOpen
-        local targetH = dropOpen and PILL_EXPANDED_H or PILL_COLLAPSED_H
-        Arrow.Text = dropOpen and "▴" or "▾"
-        TweenService:Create(PillOuter, TweenInfo.new(0.22), {Size = UDim2.new(1, 0, 0, targetH)}):Play()
-        TweenService:Create(Wrapper, TweenInfo.new(0.22), {Size = UDim2.new(0, 210, 0, 180 + PILL_GAP + targetH)}):Play()
+        local arrow = AnimBtn:FindFirstChild("DropArrow")
+        if arrow then 
+            TweenService:Create(arrow, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Rotation = dropOpen and 180 or 0}):Play()
+        end
+        local targetH = dropOpen and PILL_EXPANDED_H or 0
+        local targetT = dropOpen and 0.1 or 1
+        TweenService:Create(PillOuter, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+            Size = UDim2.new(0, 150, 0, targetH),
+            BackgroundTransparency = targetT
+        }):Play()
+        if pillStroke then
+            TweenService:Create(pillStroke, TweenInfo.new(0.3), {Transparency = dropOpen and 0.55 or 1}):Play()
+        end
     end)
 
     -- -- Mini HUD --
@@ -4023,7 +4083,7 @@ do -- Inner scope for Fly V4
     function buildHUD()
         pcall(function() if LocalPlayer.PlayerGui:FindFirstChild("FlyHUD") then LocalPlayer.PlayerGui.FlyHUD:Destroy() end end)
         hudGui = registerFlyInstance(Instance.new("ScreenGui")); hudGui.Name = "FlyHUD"; hudGui.ResetOnSpawn = false; hudGui.Parent = LocalPlayer.PlayerGui
-        local frame = Instance.new("Frame"); frame.Size = UDim2.fromOffset(180, 48); frame.Position = UDim2.new(0.5, 0, 0, 40); frame.AnchorPoint = Vector2.new(0.5, 0); frame.BackgroundColor3 = C.panelBg; frame.BackgroundTransparency = 0.1; frame.Parent = hudGui
+        local frame = Instance.new("Frame"); frame.Size = UDim2.fromOffset(180, 48); frame.Position = UDim2.new(0.5, 0, 0, 65); frame.AnchorPoint = Vector2.new(0.5, 0); frame.BackgroundColor3 = C.panelBg; frame.BackgroundTransparency = 0.1; frame.Parent = hudGui
         stylePanelSurface(frame, 10); hudStroke2 = frame:FindFirstChildOfClass("UIStroke")
         hudSpeedLabel = Instance.new("TextLabel"); hudSpeedLabel.Size = UDim2.new(1, 0, 0.55, 0); hudSpeedLabel.Position = UDim2.fromScale(0, 0.05); hudSpeedLabel.BackgroundTransparency = 1; hudSpeedLabel.Parent = frame
         applyTextStyle(hudSpeedLabel, 15)
@@ -4033,8 +4093,8 @@ do -- Inner scope for Fly V4
     function updateHUD()
         local data = getSpeedData(speedIndex)
         if not data then return end
-        if SpeedBtn then SpeedBtn.Text = "⚡  Speed: " .. data.name .. "  [Q]" end
-        StatusLabel.Text = "Status: " .. (flying and "ACTIVE" or "OFF") .. "  |  " .. data.name
+        if SpeedBtn then SpeedBtn.Text = "⚡  " .. data.name end
+        StatusLabel.Text = (flying and "ON" or "OFF") .. " | " .. data.name
         TweenService:Create(mStroke, TweenInfo.new(0.2), {Color = data.color}):Play()
         TweenService:Create(pillStroke, TweenInfo.new(0.2), {Color = data.color}):Play()
         if hudSpeedLabel then hudSpeedLabel.Text = data.name; hudSpeedLabel.TextColor3 = data.color end
@@ -4068,7 +4128,7 @@ do -- Inner scope for Fly V4
         flying = true; buildHUD(); updateHUD()
         local s = animSets[currentAnimSet]
         flyTrack = loadTrackFromId(s.idle); flyFwdTrack = loadTrackFromId(s.fwd); flyGlideTrack = loadTrackFromId(s.glide)
-        if flyTrack then flyTrack:Play() end
+        if flyTrack then flyTrack:Play(0.35) end
         _isFwdAnim = false; _isGlideIdle = false
         local myChar = LocalPlayer.Character
         local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
@@ -4083,13 +4143,13 @@ do -- Inner scope for Fly V4
             local dt = RunService.Heartbeat:Wait(); driftTime = driftTime + dt
             local cam = Camera.CFrame; local lvl = getSpeedData(speedIndex); if not lvl then break end
             local moveSpeed = lvl.speed; local accel = lvl.accel; local decel = lvl.decel; local isGlide = (speedIndex == 1)
-            -- Anim logic
+            -- Anim logic with extremely smooth 0.35s transitions
             if ctrl.f == 1 and hasBoosted and not isGlide then
-                if not _isFwdAnim then if _isGlideIdle and flyGlideTrack then flyGlideTrack:Stop() end; if flyTrack then flyTrack:Stop() end; if flyFwdTrack then flyFwdTrack:Play() end; _isFwdAnim = true; _isGlideIdle = false end
+                if not _isFwdAnim then if _isGlideIdle and flyGlideTrack then flyGlideTrack:Stop(0.35) end; if flyTrack then flyTrack:Stop(0.35) end; if flyFwdTrack then flyFwdTrack:Play(0.35) end; _isFwdAnim = true; _isGlideIdle = false end
             elseif isGlide then
-                if not _isGlideIdle then if _isFwdAnim and flyFwdTrack then flyFwdTrack:Stop() end; if flyTrack then flyTrack:Stop() end; if flyGlideTrack then flyGlideTrack:Play() end; _isGlideIdle = true; _isFwdAnim = false end
+                if not _isGlideIdle then if _isFwdAnim and flyFwdTrack then flyFwdTrack:Stop(0.35) end; if flyTrack then flyTrack:Stop(0.35) end; if flyGlideTrack then flyGlideTrack:Play(0.35) end; _isGlideIdle = true; _isFwdAnim = false end
             else
-                if _isFwdAnim or _isGlideIdle then if flyFwdTrack then flyFwdTrack:Stop() end; if flyGlideTrack then flyGlideTrack:Stop() end; if flyTrack then flyTrack:Play() end; _isFwdAnim = false; _isGlideIdle = false end
+                if _isFwdAnim or _isGlideIdle then if flyFwdTrack then flyFwdTrack:Stop(0.35) end; if flyGlideTrack then flyGlideTrack:Stop(0.35) end; if flyTrack then flyTrack:Play(0.35) end; _isFwdAnim = false; _isGlideIdle = false end
             end
             -- Velocity logic
             local inputVec = Vector3.new(0, 0, 0); local hasInput = (ctrl.l + ctrl.r ~= 0 or ctrl.f + ctrl.b ~= 0)
@@ -4108,7 +4168,7 @@ do -- Inner scope for Fly V4
             end
         end
         psConn:Disconnect()
-        if flyTrack then flyTrack:Stop() end; if flyFwdTrack then flyFwdTrack:Stop() end; if flyGlideTrack then flyGlideTrack:Stop() end
+        if flyTrack then flyTrack:Stop(0.35) end; if flyFwdTrack then flyFwdTrack:Stop(0.35) end; if flyGlideTrack then flyGlideTrack:Stop(0.35) end
         if bg then bg:Destroy(); bg = nil end; if bv then bv:Destroy(); bv = nil end
         if myHum then myHum.PlatformStand = false end; pcall(removeHUD)
     end
@@ -4122,7 +4182,7 @@ do -- Inner scope for Fly V4
                 flying    = true
                 flyActive = true
                 task.spawn(startFly)
-                if ToggleBtn then ToggleBtn.Text = "✈  Disable Fly  [F]" end
+                if ToggleBtn then ToggleBtn.Text = "Disable Fly [F]" end
                 if Wrapper   then Wrapper.Visible = true end
             end
         else
@@ -4130,7 +4190,7 @@ do -- Inner scope for Fly V4
                 flying    = false
                 flyActive = false
                 stopFly()
-                if ToggleBtn then ToggleBtn.Text = "✈  Toggle Fly  [F]" end
+                if ToggleBtn then ToggleBtn.Text = "Toggle Fly [F]" end
                 if Wrapper   then Wrapper.Visible = false end
             end
         end
@@ -8116,17 +8176,16 @@ local function tweenOpen(frame, w, h)
     frame.BackgroundTransparency = 0
     frame.Visible = true
     local s = getPopScale(frame)
-    s.Scale = 0.85
-    -- Clean, modern pop-in with slight bounce
-    tween(s, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1}):Play()
+    s.Scale = 0.88
+    -- Snappy pop-in with tight Back bounce
+    tween(s, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1}):Play()
 end
 
 local function tweenClose(frame, w, h, cb)
     local s = getPopScale(frame)
-    -- Fast, clean pop-out without buggy clipping
-    tween(s, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Scale = 0.85}):Play()
-    
-    task.delay(0.15, function()
+    -- Ultra-fast, crisp pop-out
+    tween(s, TweenInfo.new(0.10, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {Scale = 0.88}):Play()
+    task.delay(0.10, function()
         frame.Visible = false
         s.Scale = 1 -- Reset for next open
         if cb then cb() end
@@ -8389,24 +8448,36 @@ local Panel, TitleBar, SearchBox, ScrollFrame, LoadingLabel, PlayerCountLabel, R
     local CloseBtn = makeCloseBtn(TitleBar, 30, 1, -38, 0.5, 0); CloseBtn.ZIndex = 14
 
     local SearchPill = Instance.new("Frame")
-    SearchPill.Size = UDim2.new(1,-16,0,32); SearchPill.Position = UDim2.fromOffset(8,54)
-    SearchPill.BackgroundColor3 = Color3.fromRGB(15,15,15); SearchPill.BorderSizePixel = 0
-    SearchPill.ZIndex = 12; SearchPill.Parent = Panel; corner(SearchPill, 10)
+    SearchPill.Size = UDim2.new(1,-16,0,34); SearchPill.Position = UDim2.fromOffset(8,54)
+    SearchPill.BackgroundColor3 = Color3.fromRGB(20,20,24); SearchPill.BorderSizePixel = 0
+    SearchPill.ZIndex = 12; SearchPill.Parent = Panel; corner(SearchPill, math.huge)
     local spS = _makeDummyStroke(SearchPill)
     spS.Thickness = 1; spS.Color = C.bg3 or Color3.fromRGB(45,45,45); spS.Transparency = 0.5
 
     local SearchIcon = Instance.new("TextLabel")
-    SearchIcon.Text = "🔍"; SearchIcon.Size = UDim2.fromOffset(32,32); SearchIcon.Position = UDim2.fromOffset(6,0)
-    SearchIcon.BackgroundTransparency = 1; SearchIcon.TextSize = 14; SearchIcon.TextColor3 = C.TEXT2
+    SearchIcon.Text = "⌕"; SearchIcon.Size = UDim2.fromOffset(34,34); SearchIcon.Position = UDim2.fromOffset(10,0)
+    SearchIcon.BackgroundTransparency = 1; SearchIcon.TextSize = 18; SearchIcon.TextColor3 = C.TEXT2
     SearchIcon.ZIndex = 13; SearchIcon.Parent = SearchPill; applyTextStyle(SearchIcon)
 
     local SearchBox = Instance.new("TextBox")
-    SearchBox.Name = "PlayerSearchBox"; SearchBox.PlaceholderText = "Player suchen..."
-    SearchBox.Text = ""; SearchBox.ClearTextOnFocus = false; SearchBox.Size = UDim2.new(1,-50,1,0)
-    SearchBox.Position = UDim2.fromOffset(40,0); SearchBox.BackgroundTransparency = 1
-    SearchBox.TextSize = 12; SearchBox.TextColor3 = C.TEXT1; SearchBox.PlaceholderColor3 = C.TEXT2
+    SearchBox.Name = "PlayerSearchBox"; SearchBox.PlaceholderText = "Spieler suchen..."
+    SearchBox.Text = ""; SearchBox.ClearTextOnFocus = false; SearchBox.Size = UDim2.new(1,-54,1,0)
+    SearchBox.Position = UDim2.fromOffset(42,0); SearchBox.BackgroundTransparency = 1
+    SearchBox.TextSize = 13; SearchBox.TextColor3 = C.TEXT1; SearchBox.PlaceholderColor3 = C.TEXT2
     SearchBox.TextXAlignment = Enum.TextXAlignment.Left; SearchBox.TextYAlignment = Enum.TextYAlignment.Center
     SearchBox.ZIndex = 13; SearchBox.Parent = SearchPill; applyTextStyle(SearchBox)
+
+    -- SearchPill focus glow
+    bind(SearchBox.Focused, function()
+        tween(SearchPill, TI._008, {BackgroundColor3 = Color3.fromRGB(26,26,32)}):Play()
+        tween(spS, TI._008, {Color = C.accent or Color3.fromRGB(140,140,255), Transparency = 0}):Play()
+        tween(SearchIcon, TI._008, {TextColor3 = C.TEXT1}):Play()
+    end)
+    bind(SearchBox.FocusLost, function()
+        tween(SearchPill, TI._012, {BackgroundColor3 = Color3.fromRGB(20,20,24)}):Play()
+        tween(spS, TI._012, {Color = C.bg3 or Color3.fromRGB(45,45,45), Transparency = 0.5}):Play()
+        tween(SearchIcon, TI._012, {TextColor3 = C.TEXT2}):Play()
+    end)
 
     local ScrollFrame = Instance.new("ScrollingFrame")
     ScrollFrame.Size = UDim2.new(1,-16,1,-100); ScrollFrame.Position = UDim2.fromOffset(8,96)
@@ -9007,15 +9078,19 @@ local function createOutfitCard(parent, idx, outfitName, outfitId, isSavedPanel,
     end
 
     bind(hbtn.MouseEnter, function()
-        tween(card, TI._012, {BackgroundColor3=C.CARD_HOVER}):Play()
-        tween(cStroke, TI._012, {Color=C.accent or Color3.fromRGB(200, 200, 200)}):Play()
+        tween(card,    TI._008, {BackgroundColor3=C.CARD_HOVER}):Play()
+        tween(cStroke, TI._008, {Color=C.accent or Color3.fromRGB(140,140,255), Thickness=1.5}):Play()
+        tween(thumb,   TI._008, {Position=UDim2.fromOffset(6,4)}):Play()
     end)
     bind(hbtn.MouseLeave, function()
-        tween(card, TI._012, {BackgroundColor3=C.CARD}):Play()
-        tween(cStroke, TI._012, {Color=C.bg3 or Color3.fromRGB(45,45,45)}):Play()
+        tween(card,    TI._008, {BackgroundColor3=C.CARD}):Play()
+        tween(cStroke, TI._008, {Color=C.bg3 or Color3.fromRGB(45,45,45), Thickness=1}):Play()
+        tween(thumb,   TI._008, {Position=UDim2.fromOffset(6,6)}):Play()
     end)
-    bind(hbtn.MouseButton1Down, function() tween(getPopScale(card), TI._008, {Scale=0.96}):Play() end)
-    bind(hbtn.MouseButton1Up, function() tween(getPopScale(card), TI._016, {Scale=1}):Play() end)
+    bind(hbtn.MouseButton1Down, function() tween(getPopScale(card), TI._008, {Scale=0.93}):Play() end)
+    bind(hbtn.MouseButton1Up,   function()
+        tween(getPopScale(card), TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale=1}):Play()
+    end)
     bind(hbtn.MouseButton1Click, function() applyOutfit(outfitId) end)
 
     return card
@@ -9251,15 +9326,19 @@ local function createPlayerCard(player, index, startHidden)
     btn.ZIndex = 17; btn.Parent = card
 
     bind(btn.MouseEnter, function()
-        tween(card, TI._012, {BackgroundColor3=C.CARD_HOVER}):Play()
-        tween(cStroke, TI._012, {Color=C.accent or Color3.fromRGB(200, 200, 200)}):Play()
+        tween(card,    TI._008, {BackgroundColor3=C.CARD_HOVER}):Play()
+        tween(cStroke, TI._008, {Color=C.accent or Color3.fromRGB(140,140,255), Thickness=1.5}):Play()
+        tween(thumb,   TI._008, {Position=UDim2.fromOffset(8,6)}):Play()
     end)
     bind(btn.MouseLeave, function()
-        tween(card, TI._012, {BackgroundColor3=C.CARD}):Play()
-        tween(cStroke, TI._012, {Color=C.bg3 or Color3.fromRGB(45,45,45)}):Play()
+        tween(card,    TI._008, {BackgroundColor3=C.CARD}):Play()
+        tween(cStroke, TI._008, {Color=C.bg3 or Color3.fromRGB(45,45,45), Thickness=1}):Play()
+        tween(thumb,   TI._008, {Position=UDim2.fromOffset(8,8)}):Play()
     end)
-    bind(btn.MouseButton1Down, function() tween(getPopScale(card), TI._008, {Scale=0.96}):Play() end)
-    bind(btn.MouseButton1Up, function() tween(getPopScale(card), TI._016, {Scale=1}):Play() end)
+    bind(btn.MouseButton1Down, function() tween(getPopScale(card), TI._008, {Scale=0.93}):Play() end)
+    bind(btn.MouseButton1Up,   function()
+        tween(getPopScale(card), TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale=1}):Play()
+    end)
     bind(btn.MouseButton1Click, function() openOutfitPanel(player) end)
 
     playerCardSnapshots[card] = buildTransparencySnapshot(card)
@@ -9465,7 +9544,11 @@ bind(OutfitReloadBtn.MouseButton1Click, function()
 end)
 
 bind(Services.UserInputService.InputBegan, function(inp, gp)
-    if not gp and inp.KeyCode == C.KEYBIND then
+    if gp then return end
+    -- Don't fire keybind while user is typing in any TextBox
+    local focused = Services.UserInputService:GetFocusedTextBox()
+    if focused then return end
+    if inp.KeyCode == C.KEYBIND then
         if isOpen then closePanel() else openPanel() end
     end
 end)
@@ -10420,15 +10503,6 @@ do
     LocalPlayer.CharacterAdded:Connect(function()
         if _ctActive then _ctStart() end
     end)
-    
-    local flyRow, flySetFn = sRow(movePage, 336, "Fly V4", "Movement System", C.accent, false, function(on)
-        if setFly then setFly(on) end
-    end)
-    -- Sync external toggle (like keybinds) with this row
-    _flyPanelSetFn = function(on)
-        flySetFn(on)
-        if setFly then setFly(on) end
-    end
 end
 
 local visualPage = Instance.new("Frame", sSubArea)
@@ -21123,6 +21197,3 @@ env.TLUnload = TLMenuCleanup
 end)
 _G.TLMenuCleanup = TLMenuCleanup
 end)()
-
-
-
